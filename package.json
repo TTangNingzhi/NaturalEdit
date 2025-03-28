@@ -14,8 +14,12 @@
   "contributes": {
     "commands": [
       {
-        "command": "modmap.helloWorld",
-        "title": "Hello World"
+        "command": "modmap.hello2Webview",
+        "title": "Hello to Webview"
+      },
+      {
+        "command": "modmap.openWebview",
+        "title": "Open ModMap WebView"
       }
     ]
   },

@@ -1,26 +1,51 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+	let webviewPanel: vscode.WebviewPanel | undefined = undefined;
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "modmap" is now active!');
+	const openWebviewCommand = vscode.commands.registerCommand('modmap.openWebview', () => {
+		webviewPanel = vscode.window.createWebviewPanel('modmapWebview', 'ModMap', vscode.ViewColumn.Two, { enableScripts: true });
+		webviewPanel.webview.html = `<!DOCTYPE html>
+			<html>
+				<head><meta charset="UTF-8"></head>
+				<body>
+					<iframe src="http://localhost:5173" style="width:100%;height:100vh;border:0"></iframe>
+					<script>
+						const vscode = acquireVsCodeApi();
+						const iframe = document.querySelector('iframe');
+						window.addEventListener('message', e => {
+							if (e.source === iframe?.contentWindow) {
+								vscode.postMessage(e.data);
+							} else if (e.origin.startsWith('vscode-webview://')) {
+								iframe?.contentWindow?.postMessage(e.data, '*');
+							}
+						});
+					</script>
+				</body>
+			</html>`;
+		webviewPanel.onDidDispose(() => {
+			webviewPanel = undefined;
+		});
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('modmap.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from ModMap!');
+		webviewPanel.webview.onDidReceiveMessage(message => {
+			if (message.command === 'hello') {
+				vscode.window.showInformationMessage(message.text);
+			}
+		});
 	});
 
-	context.subscriptions.push(disposable);
+	const sendHelloCommand = vscode.commands.registerCommand('modmap.hello2Webview', () => {
+		if (webviewPanel) {
+			webviewPanel.webview.postMessage({
+				command: 'hello',
+				text: 'Hello from VSCode!'
+			});
+		} else {
+			vscode.window.showInformationMessage('WebView is not open!');
+		}
+	});
+
+	context.subscriptions.push(openWebviewCommand, sendHelloCommand);
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
