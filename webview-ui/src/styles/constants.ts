@@ -7,6 +7,7 @@ export const FONT_SIZE = {
     HEADER: '15px',
     BODY: '14px',
     SMALL: '12px',
+    TINY: '10px',
     ICON: '16px',
     ICON_SMALL: '14px'
 } as const;
@@ -28,6 +29,7 @@ export const COLORS = {
  * Spacing constants for consistent layout
  */
 export const SPACING = {
+    MINUS_TINY: '-2px',
     TINY: '2px',
     SMALL: '4px',
     MEDIUM: '8px',

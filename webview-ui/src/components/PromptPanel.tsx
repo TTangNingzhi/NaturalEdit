@@ -3,6 +3,7 @@ import {
     VSCodeButton,
     VSCodeTextArea
 } from "@vscode/webview-ui-toolkit/react/index.js";
+import { SummaryDiffEditor } from "./SummaryDiffEditor";
 import { SummaryLevel } from "../types/sectionTypes.js";
 import { FONT_SIZE, SPACING, COMMON_STYLES } from "../styles/constants.js";
 
@@ -74,8 +75,8 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                 <VSCodeTextArea
                     value={directPrompt}
                     onInput={e => setDirectPrompt((e.target as HTMLTextAreaElement).value)}
-                    style={{ width: "100%", marginBottom: SPACING.TINY }}
-                    placeholder="Enter your instruction for code modification."
+                    style={{ width: "100%", marginBottom: SPACING.TINY, fontFamily: "monospace", fontSize: FONT_SIZE.SMALL }}
+                    placeholder="Enter a direct instruction."
                     resize="vertical"
                     rows={3}
                 />
@@ -116,14 +117,15 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />
                     </button>
                 </div>
-                <VSCodeTextArea
-                    value={summary}
-                    onInput={e => setSummary((e.target as HTMLTextAreaElement).value)}
-                    style={{ width: "100%" }}
-                    placeholder="Edit the summary."
-                    resize="vertical"
-                    rows={3}
-                    disabled={!editPromptLevel}
+                <SummaryDiffEditor
+                    originalSummary={editPromptValue}
+                    currentSummary={summary}
+                    onChange={newValue => {
+                        setSummary(newValue);
+                        if (editPromptLevel) {
+                            onEditSummary(editPromptLevel, newValue);
+                        }
+                    }}
                 />
             </div>
         </div>

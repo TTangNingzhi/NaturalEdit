@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getLLMSummary, getLLMEditFromSummary, getLLMEditFromDirectPrompt, getLLMEditFromPromptToSummary } from '../llm/llmApi';
+import { getLastActiveEditor } from '../extension';
 
 /**
  * Handles incoming messages from the webview
@@ -31,7 +32,7 @@ export async function handleMessage(message: any, webviewPanel: vscode.WebviewPa
  * Handles the getSummary command
  */
 async function handleGetSummary(message: any, webviewPanel: vscode.WebviewPanel) {
-    const editor = vscode.window.activeTextEditor;
+    const editor = getLastActiveEditor();
     const selectedText = editor?.document.getText(editor.selection) || '';
 
     if (!selectedText) {
@@ -183,4 +184,4 @@ function getFileInfo(editor: vscode.TextEditor | undefined) {
     }
 
     return { filename, lines };
-} 
+}

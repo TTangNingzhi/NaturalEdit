@@ -10,7 +10,7 @@ interface SummaryDisplayProps {
     summary: SummaryData;
     selectedLevel: SummaryLevel;
     onLevelChange: (level: SummaryLevel) => void;
-    onEditPrompt: (level: SummaryLevel, value: string) => void;
+    onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
 }
 
 /**
@@ -50,6 +50,10 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                         const value = ((e as Event).target as HTMLInputElement).value as SummaryLevel;
                         onLevelChange(value);
                     }}
+                    style={{
+                        marginBottom: SPACING.MINUS_TINY,
+                        marginTop: SPACING.MINUS_TINY
+                    }}
                 >
                     <VSCodeRadio value="concise">Concise</VSCodeRadio>
                     <VSCodeRadio value="detailed">Detailed</VSCodeRadio>
@@ -77,8 +81,8 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                     <pre style={{
                         margin: 0,
                         whiteSpace: "pre-line",
-                        fontFamily: "var(--vscode-editor-font-family, monospace)",
-                        fontSize: FONT_SIZE.SMALL,
+                        fontFamily: "var(--vscode-font-family)",
+                        fontSize: FONT_SIZE.BODY,
                         color: COLORS.FOREGROUND,
                         minHeight: 40,
                         background: "none",

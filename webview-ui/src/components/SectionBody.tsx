@@ -8,7 +8,7 @@ interface SectionBodyProps {
     summaryData: SummaryData;
     selectedLevel: SummaryLevel;
     onLevelChange: (level: SummaryLevel) => void;
-    onEditPrompt: (level: SummaryLevel, value: string) => void;
+    onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
     editPromptLevel: SummaryLevel | null;
     editPromptValue: string;
     onDirectPrompt: (prompt: string) => void;

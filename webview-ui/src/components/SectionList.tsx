@@ -27,11 +27,12 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
     };
 
     // Handler for "Edit In Prompt" button (per section)
-    const handleEditPrompt = (id: string, level: SummaryLevel, value: string) => {
+    const handleEditPrompt = (id: string, level: SummaryLevel, value: string | string[]) => {
+        const stringValue = Array.isArray(value) ? value.join(", ") : value;
         onSectionsChange(
             sections.map(s =>
                 s.id === id
-                    ? { ...s, editPromptLevel: level, editPromptValue: value }
+                    ? { ...s, editPromptLevel: level, editPromptValue: stringValue }
                     : s
             )
         );

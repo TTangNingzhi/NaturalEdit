@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { VSCodeButton, VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react/index.js";
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react/index.js";
 import { FONT_SIZE, COLORS, SPACING } from "./styles/constants.js";
+import { ClipLoader } from "react-spinners";
 import SectionList from "./components/SectionList.js";
 import { SectionData } from "./types/sectionTypes.js";
 import { setupMessageHandler, requestSummary } from "./services/MessageHandler.js";
@@ -35,7 +36,7 @@ function App() {
   return (
     <div style={{ width: "100%" }}>
       <h2 style={{
-        margin: `${SPACING.MEDIUM} 0 ${SPACING.MEDIUM} 0`,
+        margin: `${SPACING.LARGE} 0 ${SPACING.MEDIUM} 0`,
         color: COLORS.FOREGROUND,
         fontSize: FONT_SIZE.TITLE
       }}>
@@ -52,17 +53,18 @@ function App() {
         onClick={handleRequestSummary}
         disabled={loading}
         style={{
-          marginBottom: SPACING.LARGE,
+          marginBottom: error ? SPACING.MEDIUM : SPACING.LARGE,
           display: "flex",
           alignItems: "center",
         }}
       >
         {loading && (
-          <VSCodeProgressRing
-            style={{
-              width: 16,
-              height: 16,
-              marginRight: 8
+          <ClipLoader
+            color={COLORS.FOREGROUND}
+            size={FONT_SIZE.TINY}
+            cssOverride={{
+              borderWidth: '3px',
+              marginRight: SPACING.SMALL
             }}
           />
         )}

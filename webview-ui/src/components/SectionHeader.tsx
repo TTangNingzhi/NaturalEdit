@@ -83,15 +83,15 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                             const icon = getFileIcon(filename);
                             return icon.type === 'svg'
                                 ? <img src={icon.value} alt="" style={{
-                                    width: 20,
-                                    height: 20,
+                                    width: 18,
+                                    height: 18,
                                     marginRight: SPACING.TINY,
                                     opacity: 0.95,
                                     verticalAlign: 'middle',
                                     display: 'inline-block'
                                 }} />
                                 : <span className={`codicon ${icon.value}`} style={{
-                                    fontSize: 20,
+                                    fontSize: 18,
                                     marginRight: SPACING.TINY,
                                     opacity: 0.95,
                                     verticalAlign: 'middle',
