@@ -9,6 +9,7 @@ import SectionBody from "./SectionBody.js";
  * The open/close state is controlled by the parent via 'collapsed' and 'onToggle'.
  */
 interface SectionProps {
+    id: string;
     title: string;
     filename: string;
     lines: [number, number];
@@ -20,9 +21,9 @@ interface SectionProps {
     onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
     editPromptLevel: SummaryLevel | null;
     editPromptValue: string;
-    onDirectPrompt: (prompt: string) => void;
-    onEditSummary: (level: SummaryLevel, value: string) => void;
-    onPromptToSummary: (level: SummaryLevel, summary: string, prompt: string) => void;
+    originalCode: string;
+    fullPath: string;
+    offset: number;
     collapsed: boolean;
     onToggle: () => void;
 }
@@ -32,6 +33,7 @@ interface SectionProps {
  * Main container for a code section with summary and prompt functionality
  */
 const Section: React.FC<SectionProps> = ({
+    id,
     title,
     filename,
     lines,
@@ -43,11 +45,11 @@ const Section: React.FC<SectionProps> = ({
     onEditPrompt,
     editPromptLevel,
     editPromptValue,
-    onDirectPrompt,
-    onEditSummary,
-    onPromptToSummary,
     collapsed,
-    onToggle
+    onToggle,
+    originalCode,
+    fullPath,
+    offset
 }) => {
     // The open/close state is controlled by the parent via props.
     // 'collapsed' determines if the section is closed.
@@ -71,15 +73,17 @@ const Section: React.FC<SectionProps> = ({
             />
             {!collapsed && (
                 <SectionBody
+                    sectionId={id}
+                    filename={filename}
                     summaryData={summaryData}
                     selectedLevel={selectedLevel}
                     onLevelChange={onLevelChange}
                     onEditPrompt={onEditPrompt}
                     editPromptLevel={editPromptLevel}
                     editPromptValue={editPromptValue}
-                    onDirectPrompt={onDirectPrompt}
-                    onEditSummary={onEditSummary}
-                    onPromptToSummary={onPromptToSummary}
+                    originalCode={originalCode}
+                    fullPath={fullPath}
+                    offset={offset}
                 />
             )}
         </div>

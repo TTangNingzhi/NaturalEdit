@@ -5,15 +5,17 @@ import { SummaryData, SummaryLevel } from "../types/sectionTypes.js";
 import { COLORS, SPACING } from "../styles/constants.js";
 
 interface SectionBodyProps {
+    sectionId: string;
+    filename: string;
     summaryData: SummaryData;
     selectedLevel: SummaryLevel;
     onLevelChange: (level: SummaryLevel) => void;
     onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
     editPromptLevel: SummaryLevel | null;
     editPromptValue: string;
-    onDirectPrompt: (prompt: string) => void;
-    onEditSummary: (level: SummaryLevel, value: string) => void;
-    onPromptToSummary: (level: SummaryLevel, summary: string, prompt: string) => void;
+    originalCode: string;
+    fullPath: string;
+    offset: number;
 }
 
 /**
@@ -21,15 +23,17 @@ interface SectionBodyProps {
  * Contains the summary display and prompt panel
  */
 const SectionBody: React.FC<SectionBodyProps> = ({
+    sectionId,
+    filename,
     summaryData,
     selectedLevel,
     onLevelChange,
     onEditPrompt,
     editPromptLevel,
     editPromptValue,
-    onDirectPrompt,
-    onEditSummary,
-    onPromptToSummary
+    originalCode,
+    fullPath,
+    offset
 }) => {
     return (
         <div style={{
@@ -45,9 +49,11 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             <PromptPanel
                 editPromptLevel={editPromptLevel}
                 editPromptValue={editPromptValue}
-                onDirectPrompt={onDirectPrompt}
-                onEditSummary={onEditSummary}
-                onPromptToSummary={onPromptToSummary}
+                sectionId={sectionId}
+                originalCode={originalCode}
+                filename={filename}
+                fullPath={fullPath}
+                offset={offset}
             />
         </div>
     );

@@ -22,6 +22,9 @@ export interface SectionData {
     selectedLevel: SummaryLevel;
     editPromptLevel: SummaryLevel | null;
     editPromptValue: string;
+    originalCode: string;
+    fullPath: string;
+    offset: number;
 }
 
 // Message from VSCode containing summary data
@@ -34,6 +37,9 @@ export interface SummaryResultMessage {
     title?: string;
     concise?: string;
     lastOpened?: string;
+    originalCode?: string;
+    fullPath?: string;
+    offset?: number;
 }
 
 // Convert a line range string to a tuple of numbers

@@ -4,7 +4,8 @@ import { FONT_SIZE, COLORS, SPACING } from "./styles/constants.js";
 import { ClipLoader } from "react-spinners";
 import SectionList from "./components/SectionList.js";
 import { SectionData } from "./types/sectionTypes.js";
-import { setupMessageHandler, requestSummary } from "./services/MessageHandler.js";
+import { createStatefulMessageHandler, requestSummary } from "./services/MessageHandler.js";
+import { PromptProvider } from "./contexts/PromptProvider.js";
 
 function App() {
   // State for all code-summary pairs
@@ -14,16 +15,7 @@ function App() {
 
   // Setup message handler
   useEffect(() => {
-    setupMessageHandler(
-      (error) => {
-        setLoading(false);
-        setError(error);
-      },
-      (section) => {
-        setLoading(false);
-        setSectionList(prev => [...prev, section]);
-      }
-    );
+    createStatefulMessageHandler(setLoading, setError, setSectionList)();
   }, []);
 
   // Handler: Summarize Selected Code
@@ -34,55 +26,57 @@ function App() {
   };
 
   return (
-    <div style={{ width: "100%" }}>
-      <h2 style={{
-        margin: `${SPACING.LARGE} 0 ${SPACING.MEDIUM} 0`,
-        color: COLORS.FOREGROUND,
-        fontSize: FONT_SIZE.TITLE
-      }}>
-        NaturalEdit
-      </h2>
-      <div style={{
-        color: COLORS.DESCRIPTION,
-        marginBottom: SPACING.MEDIUM,
-        fontSize: FONT_SIZE.SUBTITLE
-      }}>
-        Transform your code seamlessly by modifying its natural language descriptions.
-      </div>
-      <VSCodeButton
-        onClick={handleRequestSummary}
-        disabled={loading}
-        style={{
-          marginBottom: error ? SPACING.MEDIUM : SPACING.LARGE,
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
-        {loading && (
-          <ClipLoader
-            color={COLORS.FOREGROUND}
-            size={FONT_SIZE.TINY}
-            cssOverride={{
-              borderWidth: '3px',
-              marginRight: SPACING.SMALL
-            }}
-          />
-        )}
-        {loading ? "Summarizing..." : "Summarize Selected Code"}
-      </VSCodeButton>
-      {error && (
-        <div style={{
-          color: COLORS.ERROR,
-          marginBottom: SPACING.LARGE
+    <PromptProvider>
+      <div style={{ width: "100%" }}>
+        <h2 style={{
+          margin: `${SPACING.LARGE} 0 ${SPACING.MEDIUM} 0`,
+          color: COLORS.FOREGROUND,
+          fontSize: FONT_SIZE.TITLE
         }}>
-          {error}
+          NaturalEdit
+        </h2>
+        <div style={{
+          color: COLORS.DESCRIPTION,
+          marginBottom: SPACING.MEDIUM,
+          fontSize: FONT_SIZE.SUBTITLE
+        }}>
+          Transform your code seamlessly by modifying its natural language descriptions.
         </div>
-      )}
-      <SectionList
-        sections={sectionList}
-        onSectionsChange={setSectionList}
-      />
-    </div>
+        <VSCodeButton
+          onClick={handleRequestSummary}
+          disabled={loading}
+          style={{
+            marginBottom: error ? SPACING.MEDIUM : SPACING.LARGE,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          {loading && (
+            <ClipLoader
+              color={COLORS.FOREGROUND}
+              size={FONT_SIZE.TINY}
+              cssOverride={{
+                borderWidth: '3px',
+                marginRight: SPACING.SMALL
+              }}
+            />
+          )}
+          {loading ? "Summarizing..." : "Summarize Selected Code"}
+        </VSCodeButton>
+        {error && (
+          <div style={{
+            color: COLORS.ERROR,
+            marginBottom: SPACING.LARGE
+          }}>
+            {error}
+          </div>
+        )}
+        <SectionList
+          sections={sectionList}
+          onSectionsChange={setSectionList}
+        />
+      </div>
+    </PromptProvider>
   );
 }
 

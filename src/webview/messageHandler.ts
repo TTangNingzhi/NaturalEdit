@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getLLMSummary, getLLMEditFromSummary, getLLMEditFromDirectPrompt, getLLMEditFromPromptToSummary } from '../llm/llmApi';
+import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction } from '../llm/llmApi';
 import { getLastActiveEditor } from '../extension';
 
 /**
@@ -13,11 +13,8 @@ export async function handleMessage(message: any, webviewPanel: vscode.WebviewPa
         case 'getSummary':
             await handleGetSummary(message, webviewPanel);
             break;
-        case 'editSummary':
-            handleEditSummary(message);
-            break;
-        case 'editSummaryPrompt':
-            await handleEditSummaryPrompt(message, webviewPanel);
+        case 'summaryPrompt':
+            await handleSummaryPrompt(message, webviewPanel);
             break;
         case 'directPrompt':
             await handleDirectPrompt(message, webviewPanel);
@@ -44,17 +41,20 @@ async function handleGetSummary(message: any, webviewPanel: vscode.WebviewPanel)
     }
 
     try {
-        const summary = await getLLMSummary(selectedText);
-        const { filename, lines } = getFileInfo(editor);
+        const summary = await getCodeSummary(selectedText);
+        const { filename, fullPath, lines } = getFileInfo(editor);
 
         webviewPanel.webview.postMessage({
             command: 'summaryResult',
             data: summary,
             filename,
+            fullPath,
             lines,
             title: summary.title,
             concise: summary.concise,
-            lastOpened: new Date().toLocaleString()
+            lastOpened: new Date().toLocaleString(),
+            originalCode: selectedText,
+            offset: editor ? editor.document.offsetAt(editor.selection.start) : 0
         });
     } catch (err: any) {
         webviewPanel.webview.postMessage({
@@ -65,105 +65,191 @@ async function handleGetSummary(message: any, webviewPanel: vscode.WebviewPanel)
 }
 
 /**
- * Handles the editSummary command
- */
-function handleEditSummary(message: any) {
-    console.log('Edited summary received:', message.data, 'Level:', message.level);
-    vscode.window.showInformationMessage('Edited summary received for level: ' + message.level);
-}
-
-/**
- * Handles the editSummaryPrompt command
- */
-async function handleEditSummaryPrompt(message: any, webviewPanel: vscode.WebviewPanel) {
-    console.log('Summary-mediated prompt received:', message);
-    const editor = vscode.window.activeTextEditor;
-    const originalCode = editor?.document.getText(editor.selection) || '';
-
-    if (!originalCode) {
-        webviewPanel.webview.postMessage({
-            command: 'editResult',
-            error: 'No code selected for edit.'
-        });
-        return;
-    }
-
-    const newCode = await getLLMEditFromSummary(originalCode, message.summaryText, message.summaryLevel);
-    const diff = generateDiff(originalCode, newCode);
-
-    webviewPanel.webview.postMessage({
-        command: 'editResult',
-        newCode,
-        diff
-    });
-}
-
-/**
- * Handles the directPrompt command
- */
-async function handleDirectPrompt(message: any, webviewPanel: vscode.WebviewPanel) {
-    console.log('Direct prompt received:', message);
-    const editor = vscode.window.activeTextEditor;
-    const originalCode = editor?.document.getText(editor.selection) || '';
-
-    if (!originalCode) {
-        webviewPanel.webview.postMessage({
-            command: 'editResult',
-            error: 'No code selected for edit.'
-        });
-        return;
-    }
-
-    const newCode = await getLLMEditFromDirectPrompt(originalCode, message.promptText);
-    const diff = generateDiff(originalCode, newCode);
-
-    webviewPanel.webview.postMessage({
-        command: 'editResult',
-        newCode,
-        diff
-    });
-}
-
-/**
  * Handles the promptToSummary command
+ * This operation only updates the summary using the LLM and does not require a code selection.
  */
 async function handlePromptToSummary(message: any, webviewPanel: vscode.WebviewPanel) {
-    console.log('Prompt to summary received:', message);
-    const editor = vscode.window.activeTextEditor;
-    const originalCode = editor?.document.getText(editor.selection) || '';
-
-    if (!originalCode) {
-        webviewPanel.webview.postMessage({
-            command: 'editResult',
-            error: 'No code selected for edit.'
-        });
-        return;
-    }
-
-    const newCode = await getLLMEditFromPromptToSummary(
-        originalCode,
+    console.log('Apply to summary (promptToSummary) received:', message);
+    // Call the LLM to update the summary based on the direct prompt
+    const updatedSummary = await getSummaryFromInstruction(
+        "", // No code context needed for summary update
         message.summaryText,
         message.summaryLevel,
         message.promptText
     );
-    const diff = generateDiff(originalCode, newCode);
+    console.log('Updated summary:', updatedSummary);
 
+    // Return the updated summary to the frontend
     webviewPanel.webview.postMessage({
         command: 'editResult',
-        newCode,
-        diff
+        sectionId: message.sectionId,
+        action: 'promptToSummary',
+        newCode: updatedSummary
     });
 }
 
 /**
- * Generates diff between original and new code
+ * Handles the summaryPrompt command with fuzzy patching.
  */
-function generateDiff(originalCode: string, newCode: string) {
+async function handleSummaryPrompt(message: any, webviewPanel: vscode.WebviewPanel) {
+    console.log('Summary-mediated prompt received:', message);
+
+    const { originalCode, filename, fullPath } = message;
+    if (!originalCode || !(filename || fullPath)) {
+        webviewPanel.webview.postMessage({
+            command: 'editResult',
+            sectionId: message.sectionId,
+            action: 'summaryPrompt',
+            error: 'Missing original code or filename.'
+        });
+        return;
+    }
+
+    const newCode = await getCodeFromSummaryEdit(originalCode, message.summaryText, message.summaryLevel);
+    await applyCodeChanges(webviewPanel, message, originalCode, newCode, filename, fullPath, 'summaryPrompt');
+}
+
+/**
+ * Handles the directPrompt command with fuzzy patching.
+ */
+async function handleDirectPrompt(message: any, webviewPanel: vscode.WebviewPanel) {
+    console.log('Direct prompt received:', message);
+
+    const { originalCode, filename, fullPath } = message;
+    if (!originalCode || !(filename || fullPath)) {
+        webviewPanel.webview.postMessage({
+            command: 'editResult',
+            sectionId: message.sectionId,
+            action: 'directPrompt',
+            error: 'Missing original code or filename.'
+        });
+        return;
+    }
+
+    const newCode = await getCodeFromDirectInstruction(originalCode, message.promptText);
+    await applyCodeChanges(webviewPanel, message, originalCode, newCode, filename, fullPath, 'directPrompt');
+}
+
+/**
+ * Applies a fuzzy patch to the file, replacing the matched region with new code.
+ * This function is used by both directPrompt and editSummaryPrompt handlers.
+ * Returns { success: boolean, patchedText?: string, error?: string }
+ */
+async function applyFuzzyPatchAndReplaceInFile(
+    fileUri: vscode.Uri,
+    document: vscode.TextDocument,
+    originalCode: string,
+    newCode: string,
+    offset: number
+): Promise<{ success: boolean; patchedText?: string; error?: string }> {
+    const fileText = document.getText();
     const DiffMatchPatch = require('diff-match-patch');
     const dmp = new DiffMatchPatch();
-    const diff = dmp.diff_main(originalCode, newCode);
-    dmp.diff_cleanupSemantic(diff);
-    return diff;
+    const loc = dmp.match_main(fileText, originalCode, offset);
+
+    if (loc === -1) {
+        return { success: false, error: "Could not find the original code in the file. The code may have changed too much." };
+    }
+
+    const patchList = dmp.patch_make(originalCode, newCode);
+    const [patchedText, results] = dmp.patch_apply(patchList, originalCode);
+
+    if (results.some((applied: boolean) => !applied)) {
+        return { success: false, error: "Failed to apply patch. The code may have changed too much since the summary was generated." };
+    }
+
+    const edit = new vscode.WorkspaceEdit();
+    const start = document.positionAt(loc);
+    const end = document.positionAt(loc + originalCode.length);
+    edit.replace(fileUri, new vscode.Range(start, end), patchedText);
+
+    const success = await vscode.workspace.applyEdit(edit);
+    if (!success) {
+        return { success: false, error: "Failed to apply edit to the file." };
+    }
+
+    return { success: true, patchedText };
+}
+
+/**
+ * Opens a file and returns its document and URI
+ * @param filename The filename to open
+ * @param fullPath The full path to the file
+ * @returns Object containing the document and URI, or null if file cannot be opened
+ */
+async function openFile(filename: string, fullPath: string): Promise<{ document: vscode.TextDocument; fileUri: vscode.Uri } | null> {
+    const fileUri = fullPath
+        ? vscode.Uri.file(fullPath)
+        : vscode.Uri.file(path.isAbsolute(filename) ? filename : path.join(vscode.workspace.rootPath || "", filename));
+
+    try {
+        // Check if file exists before opening
+        let fileExists = true;
+        try {
+            await vscode.workspace.fs.stat(fileUri);
+        } catch (e) {
+            fileExists = false;
+        }
+        if (!fileExists) {
+            return null;
+        }
+        const document = await vscode.workspace.openTextDocument(fileUri);
+        return { document, fileUri };
+    } catch (err) {
+        return null;
+    }
+}
+
+/**
+ * Common function to apply code changes to a file
+ * @param webviewPanel The webview panel instance
+ * @param message The original message
+ * @param originalCode The original code to be replaced
+ * @param newCode The new code to replace with
+ * @param filename The filename
+ * @param fullPath The full path to the file
+ * @param action The action type (directPrompt or editSummaryPrompt)
+ */
+async function applyCodeChanges(
+    webviewPanel: vscode.WebviewPanel,
+    message: any,
+    originalCode: string,
+    newCode: string,
+    filename: string,
+    fullPath: string,
+    action: 'directPrompt' | 'summaryPrompt'
+) {
+    const fileInfo = await openFile(filename, fullPath);
+    if (!fileInfo) {
+        webviewPanel.webview.postMessage({
+            command: 'editResult',
+            sectionId: message.sectionId,
+            action,
+            error: `File not found: ${filename}. Please check that the file exists in your workspace.`
+        });
+        return;
+    }
+
+    const { document, fileUri } = fileInfo;
+    const offset = typeof message.offset === "number" ? message.offset : 0;
+    const result = await applyFuzzyPatchAndReplaceInFile(fileUri, document, originalCode, newCode, offset);
+
+    if (!result.success) {
+        webviewPanel.webview.postMessage({
+            command: 'editResult',
+            sectionId: message.sectionId,
+            action,
+            error: result.error
+        });
+        return;
+    }
+
+    webviewPanel.webview.postMessage({
+        command: 'editResult',
+        sectionId: message.sectionId,
+        action,
+        newCode: result.patchedText
+    });
 }
 
 /**
@@ -171,10 +257,11 @@ function generateDiff(originalCode: string, newCode: string) {
  */
 function getFileInfo(editor: vscode.TextEditor | undefined) {
     let filename = "unknown";
+    let fullPath = "";
     let lines = "";
 
     if (editor) {
-        const fullPath = editor.document.fileName;
+        fullPath = editor.document.fileName;
         filename = path.basename(fullPath);
         const startLine = editor.selection.start.line;
         const endLine = editor.selection.end.line;
@@ -183,5 +270,5 @@ function getFileInfo(editor: vscode.TextEditor | undefined) {
             : `${startLine + 1}-${endLine + 1}`;
     }
 
-    return { filename, lines };
+    return { filename, fullPath, lines };
 }

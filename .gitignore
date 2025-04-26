@@ -5,3 +5,4 @@ node_modules
 *.vsix
 .cursor
 .DS_Store
+**/src-deprecated
