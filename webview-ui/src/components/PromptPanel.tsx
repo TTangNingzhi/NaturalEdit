@@ -4,33 +4,19 @@ import {
     VSCodeTextArea
 } from "@vscode/webview-ui-toolkit/react/index.js";
 import { SummaryDiffEditor } from "./SummaryDiffEditor";
-import { SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
 import { FONT_SIZE, SPACING, COMMON_STYLES } from "../styles/constants.js";
 import { usePrompt } from "../hooks/usePrompt.js";
 
-/**
- * Props for PromptPanel component, including all data required for summary edit backend communication.
- */
 interface PromptPanelProps {
-    editPromptLevel: SummaryLevel | null;
-    editPromptValue: string;
-    sectionId: string;
-    originalCode: string;
-    filename: string;
-    fullPath: string;
-    offset: number;
+    section: SectionData;
 }
 
 const PromptPanel: React.FC<PromptPanelProps> = ({
-    editPromptLevel,
-    editPromptValue,
-    sectionId,
-    originalCode,
-    filename,
-    fullPath,
-    offset,
+    section,
 }) => {
-    const { onDirectPrompt, onPromptToSummary, onSummaryPrompt } = usePrompt();
+    const { metadata, editPromptLevel, editPromptValue } = section;
+    const { onDirectPrompt, onPromptToSummary, onSummaryPrompt } = usePrompt(metadata);
 
     // Direct Prompt state
     const [directPrompt, setDirectPrompt] = useState("");
@@ -61,7 +47,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     // Direct prompt send
     const handleDirectPromptSend = () => {
         if (directPrompt.trim()) {
-            onDirectPrompt(sectionId, directPrompt.trim(), originalCode, filename, fullPath, offset);
+            onDirectPrompt(directPrompt.trim());
         }
     };
 
@@ -69,14 +55,14 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     const handleApplyToSummary = () => {
         if (editPromptLevel && directPrompt.trim()) {
             setSummary(summary);
-            onPromptToSummary(sectionId, editPromptLevel, summary, directPrompt.trim(), originalCode, filename, fullPath, offset);
+            onPromptToSummary(editPromptLevel, summary, directPrompt.trim());
         }
     };
 
     // Commit summary to backend
     const handleSummaryCommit = () => {
         if (localEditPromptLevel && currentSummary.trim()) {
-            onSummaryPrompt(sectionId, localEditPromptLevel, currentSummary.trim(), originalCode, filename, fullPath, offset);
+            onSummaryPrompt(localEditPromptLevel, currentSummary.trim());
         }
     };
 

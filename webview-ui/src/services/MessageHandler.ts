@@ -1,5 +1,6 @@
 import { vscodeApi } from "../utils/vscodeApi";
 import { SectionData, SummaryResultMessage } from "../types/sectionTypes.js";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Handle messages from VSCode
@@ -19,10 +20,15 @@ export const setupMessageHandler = (
                 if (msg.error) {
                     onError(msg.error);
                 } else if (msg.data) {
-                    const id = Date.now().toString();
+                    const id = uuidv4();
                     onNewSection({
-                        id,
-                        filename: msg.filename || "unknown",
+                        metadata: {
+                            id,
+                            filename: msg.filename || "unknown",
+                            fullPath: msg.fullPath || "",
+                            offset: typeof msg.offset === "number" ? msg.offset : 0,
+                            originalCode: msg.originalCode || ""
+                        },
                         lines: [parseInt(msg.lines?.split('-')[0] || '0'), parseInt(msg.lines?.split('-')[1] || '0')],
                         title: msg.title || "Untitled",
                         concise: msg.concise || "",
@@ -30,10 +36,7 @@ export const setupMessageHandler = (
                         summaryData: msg.data,
                         selectedLevel: "concise",
                         editPromptLevel: null,
-                        editPromptValue: "",
-                        originalCode: msg.originalCode || "",
-                        fullPath: msg.fullPath || "",
-                        offset: typeof msg.offset === "number" ? msg.offset : 0
+                        editPromptValue: ""
                     });
                 }
             } else if ("command" in message && message.command === "editResult" && onEditResult) {
@@ -176,7 +179,7 @@ export const createStatefulMessageHandler = (
             if (action === "promptToSummary") {
                 setSectionList(prev =>
                     prev.map(s =>
-                        s.id === sectionId
+                        s.metadata.id === sectionId
                             ? { ...s, editPromptValue: newCode }
                             : s
                     )

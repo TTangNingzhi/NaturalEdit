@@ -10,10 +10,23 @@ export type SummaryData = {
 
 export type SummaryLevel = "concise" | "detailed" | "bullets";
 
-// Data structure for a code section with its summary
-export interface SectionData {
+/**
+ * Metadata for a code section.
+ * Groups all section-related identifiers and file info.
+ */
+export interface SectionMetadata {
     id: string;
     filename: string;
+    fullPath: string;
+    offset: number;
+    originalCode: string;
+}
+
+/**
+ * Data structure for a code section with its summary and state.
+ */
+export interface SectionData {
+    metadata: SectionMetadata;
     lines: [number, number];
     title: string;
     concise: string;
@@ -22,9 +35,6 @@ export interface SectionData {
     selectedLevel: SummaryLevel;
     editPromptLevel: SummaryLevel | null;
     editPromptValue: string;
-    originalCode: string;
-    fullPath: string;
-    offset: number;
 }
 
 // Message from VSCode containing summary data
@@ -41,15 +51,3 @@ export interface SummaryResultMessage {
     fullPath?: string;
     offset?: number;
 }
-
-// Convert a line range string to a tuple of numbers
-export const parseLineRange = (lineStr: string | undefined): [number, number] => {
-    if (!lineStr) return [0, 0];
-    const [start, end] = lineStr.split('-').map(Number);
-    return [start, end];
-};
-
-// Convert a timestamp string to milliseconds
-export const parseTimestamp = (timestamp: string | undefined): number => {
-    return timestamp ? new Date(timestamp).getTime() : Date.now();
-};

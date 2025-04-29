@@ -1,29 +1,13 @@
 import React from "react";
-import { SummaryData, SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
 import { SPACING } from "../styles/constants.js";
 import SectionHeader from "./SectionHeader.js";
 import SectionBody from "./SectionBody.js";
 
-/**
- * Props for a collapsible Section representing a code-summary pair.
- * The open/close state is controlled by the parent via 'collapsed' and 'onToggle'.
- */
 interface SectionProps {
-    id: string;
-    title: string;
-    filename: string;
-    lines: [number, number];
-    summaryData: SummaryData;
-    lastOpened: number;
-    concise: string;
-    selectedLevel: SummaryLevel;
+    section: SectionData;
     onLevelChange: (level: SummaryLevel) => void;
     onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
-    editPromptLevel: SummaryLevel | null;
-    editPromptValue: string;
-    originalCode: string;
-    fullPath: string;
-    offset: number;
     collapsed: boolean;
     onToggle: () => void;
 }
@@ -33,27 +17,19 @@ interface SectionProps {
  * Main container for a code section with summary and prompt functionality
  */
 const Section: React.FC<SectionProps> = ({
-    id,
-    title,
-    filename,
-    lines,
-    summaryData,
-    lastOpened,
-    concise,
-    selectedLevel,
+    section,
     onLevelChange,
     onEditPrompt,
-    editPromptLevel,
-    editPromptValue,
     collapsed,
-    onToggle,
-    originalCode,
-    fullPath,
-    offset
+    onToggle
 }) => {
-    // The open/close state is controlled by the parent via props.
-    // 'collapsed' determines if the section is closed.
-    // 'onToggle' is called when the header is clicked.
+    const {
+        metadata,
+        lines,
+        title,
+        concise,
+        lastOpened,
+    } = section;
 
     return (
         <div style={{
@@ -64,7 +40,7 @@ const Section: React.FC<SectionProps> = ({
         }}>
             <SectionHeader
                 title={title}
-                filename={filename}
+                filename={metadata.filename}
                 lines={lines}
                 concise={concise}
                 lastOpened={lastOpened}
@@ -73,17 +49,9 @@ const Section: React.FC<SectionProps> = ({
             />
             {!collapsed && (
                 <SectionBody
-                    sectionId={id}
-                    filename={filename}
-                    summaryData={summaryData}
-                    selectedLevel={selectedLevel}
+                    section={section}
                     onLevelChange={onLevelChange}
                     onEditPrompt={onEditPrompt}
-                    editPromptLevel={editPromptLevel}
-                    editPromptValue={editPromptValue}
-                    originalCode={originalCode}
-                    fullPath={fullPath}
-                    offset={offset}
                 />
             )}
         </div>

@@ -20,7 +20,7 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
     const handleLevelChange = (id: string, level: SummaryLevel) => {
         onSectionsChange(
             sections.map(s =>
-                s.id === id ? { ...s, selectedLevel: level } : s
+                s.metadata.id === id ? { ...s, selectedLevel: level } : s
             )
         );
     };
@@ -30,7 +30,7 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
         const stringValue = Array.isArray(value) ? value.join(", ") : value;
         onSectionsChange(
             sections.map(s =>
-                s.id === id
+                s.metadata.id === id
                     ? { ...s, editPromptLevel: level, editPromptValue: stringValue }
                     : s
             )
@@ -46,13 +46,12 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
         <div>
             {[...sections].reverse().map((section: SectionData) => (
                 <Section
-                    key={section.id}
-                    {...section}
-                    onLevelChange={(level: SummaryLevel) => handleLevelChange(section.id, level)}
-                    onEditPrompt={(level, value) => handleEditPrompt(section.id, level, value)}
-                    // Only one section can be open at a time
-                    collapsed={section.id !== openedSectionId}
-                    onToggle={() => handleToggleSection(section.id)}
+                    key={section.metadata.id}
+                    section={section}
+                    onLevelChange={(level: SummaryLevel) => handleLevelChange(section.metadata.id, level)}
+                    onEditPrompt={(level, value) => handleEditPrompt(section.metadata.id, level, value)}
+                    collapsed={section.metadata.id !== openedSectionId}
+                    onToggle={() => handleToggleSection(section.metadata.id)}
                 />
             ))}
         </div>

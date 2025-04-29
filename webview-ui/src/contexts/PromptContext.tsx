@@ -1,10 +1,14 @@
 import { createContext } from 'react';
-import { SummaryLevel } from '../types/sectionTypes.js';
+import { SummaryLevel, SectionMetadata } from '../types/sectionTypes.js';
 
+/**
+ * PromptContextType now provides handler factories that bind section metadata.
+ * Each handler returns a function that only needs the minimal arguments.
+ */
 export interface PromptContextType {
-    onDirectPrompt: (sectionId: string, prompt: string, originalCode: string, filename: string, fullPath: string, offset: number) => void;
-    onPromptToSummary: (sectionId: string, level: SummaryLevel, summary: string, prompt: string, originalCode: string, filename: string, fullPath: string, offset: number) => void;
-    onSummaryPrompt: (sectionId: string, level: SummaryLevel, value: string, originalCode: string, filename: string, fullPath: string, offset: number) => void;
+    onDirectPrompt: (metadata: SectionMetadata) => (prompt: string) => void;
+    onPromptToSummary: (metadata: SectionMetadata) => (level: SummaryLevel, summary: string, prompt: string) => void;
+    onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string) => void;
 }
 
-export const PromptContext = createContext<PromptContextType | null>(null); 
+export const PromptContext = createContext<PromptContextType | null>(null);
