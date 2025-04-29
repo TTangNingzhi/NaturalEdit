@@ -3,40 +3,51 @@ import { generateDevHtml, generateProdHtml } from './htmlContent';
 import { handleMessage } from './messageHandler';
 
 /**
- * Creates or shows the webview panel
- * @param context Extension context
- * @returns The created webview panel
+ * Provides the NaturalEdit webview in the sidebar (activity bar).
+ * Implements the WebviewViewProvider interface.
  */
-export function createOrShowWebviewPanel(context: vscode.ExtensionContext) {
-    let webviewPanel: vscode.WebviewPanel | undefined = undefined;
+export class NaturalEditViewProvider implements vscode.WebviewViewProvider {
+    public static readonly viewType = 'naturaledit.sidebarView';
 
-    webviewPanel = vscode.window.createWebviewPanel(
-        'naturaleditWebview',
-        'NaturalEdit',
-        vscode.ViewColumn.Two,
-        { enableScripts: true }
-    );
+    private _context: vscode.ExtensionContext;
 
-    // Detect development mode using extensionMode
-    let isDev = context.extensionMode === vscode.ExtensionMode.Development;
-    isDev = false;
-
-    try {
-        // Set HTML content based on environment
-        webviewPanel.webview.html = isDev
-            ? generateDevHtml()
-            : generateProdHtml(context, webviewPanel.webview);
-
-        // Set up message handler
-        webviewPanel.webview.onDidReceiveMessage(async message => {
-            await handleMessage(message, webviewPanel!);
-        });
-
-    } catch (error) {
-        vscode.window.showErrorMessage(
-            'NaturalEdit: Failed to initialize webview. ' + (error as Error).message
-        );
+    constructor(context: vscode.ExtensionContext) {
+        this._context = context;
     }
 
-    return webviewPanel;
+    /**
+     * Called by VSCode when the view is resolved in the sidebar.
+     * @param webviewView The webview view instance
+     */
+    public resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken
+    ) {
+        // Always enable scripts in the webview
+        webviewView.webview.options = {
+            enableScripts: true,
+        };
+
+        // Detect development mode using extensionMode
+        let isDev = this._context.extensionMode === vscode.ExtensionMode.Development;
+        isDev = false; // Force production mode for now
+
+        try {
+            // Set HTML content based on environment
+            webviewView.webview.html = isDev
+                ? generateDevHtml()
+                : generateProdHtml(this._context, webviewView.webview);
+
+            // Set up message handler for the webview
+            webviewView.webview.onDidReceiveMessage(async message => {
+                await handleMessage(message, webviewView);
+            });
+
+        } catch (error) {
+            vscode.window.showErrorMessage(
+                'NaturalEdit: Failed to initialize sidebar webview. ' + (error as Error).message
+            );
+        }
+    }
 }

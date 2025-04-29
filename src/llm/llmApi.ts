@@ -155,10 +155,12 @@ export async function getSummaryFromInstruction(
 ): Promise<string> {
     const prompt = `
 You are an expert at editing summaries. Given the following original summary and a direct instruction, update the summary to fulfill the instruction.
-- Change the parts of the summary that are necessary to satisfy the instruction.
-- Keep all other parts of the summary unchanged.
-- The goal is to make it easy to see what changed by comparing the old and new summaries.
-- If the instruction cannot be integrated into the parts of the summary, directly append it to the end of the summary is fine.
+- The new summary must incorporate ALL information from the direct instruction.
+- Preserve ALL parts of the original summary that are not affected by the instruction.
+- Maintain the original summary format (sentence, bullet points, etc.).
+- When possible, integrate the instruction's changes into existing sentences or bullet points.
+- Only add new sentences or bullet points if the instruction cannot be naturally integrated into existing ones.
+- Make it easy to identify what changed by keeping unchanged parts exactly as they were.
 - Output only the updated summary, nothing else.
 
 Original summary (${summaryLevel}):

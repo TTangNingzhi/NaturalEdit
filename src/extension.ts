@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { createOrShowWebviewPanel } from './webview/webviewPanel';
+import { NaturalEditViewProvider } from './webview/webviewPanel';
 
 /**
  * Stores the most recently active text editor.
@@ -16,10 +16,19 @@ export function getLastActiveEditor(): vscode.TextEditor | undefined {
 	return lastActiveEditor;
 }
 
+/**
+ * Called when the extension is activated.
+ * Registers the NaturalEditViewProvider for the sidebar webview.
+ */
 export function activate(context: vscode.ExtensionContext) {
-	const openWebviewCommand = vscode.commands.registerCommand('naturaledit.openWebview', () => {
-		createOrShowWebviewPanel(context);
-	});
+	// Register the sidebar webview provider
+	const provider = new NaturalEditViewProvider(context);
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			NaturalEditViewProvider.viewType,
+			provider
+		)
+	);
 
 	// Listen for changes to the active text editor and update the cache.
 	vscode.window.onDidChangeActiveTextEditor(editor => {
@@ -27,8 +36,6 @@ export function activate(context: vscode.ExtensionContext) {
 			lastActiveEditor = editor;
 		}
 	});
-
-	context.subscriptions.push(openWebviewCommand);
 }
 
 export function deactivate() { }

@@ -1,8 +1,8 @@
 {
   "name": "naturaledit",
   "displayName": "NaturalEdit",
-  "publisher": "SaNDwich Lab",
-  "icon": "icon.png",
+  "publisher": "sandwich-lab",
+  "icon": "media/icon.png",
   "description": "Transform your code by editing natural language summaries",
   "version": "0.0.1",
   "repository": {
@@ -18,12 +18,24 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "naturaledit.openWebview",
-        "title": "Open NaturalEdit WebView"
-      }
-    ]
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "naturaledit-sidebar",
+          "title": "NaturalEdit",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "naturaledit-sidebar": [
+        {
+          "id": "naturaledit.sidebarView",
+          "name": "NaturalEdit",
+          "type": "webview"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
