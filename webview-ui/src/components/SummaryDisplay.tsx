@@ -1,7 +1,8 @@
 import React from "react";
 import { VSCodeRadioGroup, VSCodeRadio } from "@vscode/webview-ui-toolkit/react/index.js";
-import { SummaryData, SummaryLevel } from "../types/sectionTypes.js";
-import { FONT_SIZE, COLORS, SPACING, BORDER_RADIUS, COMMON_STYLES } from "../styles/constants.js";
+import { SummaryData, SummaryLevel, SummaryCodeMapping } from "../types/sectionTypes.js";
+import { FONT_SIZE, COLORS, SPACING, BORDER_RADIUS, COMMON_STYLES, SUMMARY_CODE_MAPPING_COLORS } from "../styles/constants.js";
+import DiffMatchPatch from "diff-match-patch";
 
 /**
  * Props for the SummaryDisplay component
@@ -11,6 +12,9 @@ interface SummaryDisplayProps {
     selectedLevel: SummaryLevel;
     onLevelChange: (level: SummaryLevel) => void;
     onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
+    summaryCodeMappings?: SummaryCodeMapping[];
+    activeMappingIndex?: number | null;
+    onMappingHover?: (index: number | null) => void;
 }
 
 /**
@@ -25,6 +29,9 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
     selectedLevel,
     onLevelChange,
     onEditPrompt,
+    summaryCodeMappings = [],
+    activeMappingIndex,
+    onMappingHover
 }) => {
     // Get the value for the selected summary level
     const getSummaryValue = (level: SummaryLevel) => {
@@ -37,6 +44,137 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
     // Handle "Edit In Prompt" button click
     const handleEdit = () => {
         onEditPrompt(selectedLevel, getSummaryValue(selectedLevel));
+    };
+
+    // Helper to render a summary string with mapping highlights using fuzzy matching (diff-match-patch)
+    // Improved: Avoid overlapping matches for summary components
+    const renderSummaryWithMapping = (
+        text: string,
+        mappings: SummaryCodeMapping[],
+        globalIndices?: number[],
+        isBullet: boolean = false
+    ) => {
+        if (!mappings || mappings.length === 0) {
+            // Fallback to plain text if no mapping
+            return text || <span style={{ color: COLORS.DESCRIPTION }}>Summary...</span>;
+        }
+
+        const dmp = new DiffMatchPatch();
+        const used: Array<[number, number]> = [];
+        const elements: React.ReactNode[] = [];
+        let cursor = 0;
+
+        // Helper to check if a range overlaps with any used range
+        const isOverlapping = (start: number, end: number) =>
+            used.some(([uStart, uEnd]) => !(end <= uStart || start >= uEnd));
+
+        // Helper to find the best match for a component
+        const findBestMatch = (comp: string, searchStart: number): [number, number] | null => {
+            const BITAP_LIMIT = 32; // limit for fuzzy match
+
+            // 1. Try exact match (case-sensitive)
+            let matchIdx = text.indexOf(comp, searchStart);
+            if (matchIdx !== -1) {
+                return [matchIdx, matchIdx + comp.length];
+            }
+
+            // 2. Try exact match (case-insensitive)
+            matchIdx = text.toLowerCase().indexOf(comp.toLowerCase(), searchStart);
+            if (matchIdx !== -1) {
+                return [matchIdx, matchIdx + comp.length];
+            }
+
+            // 3. Try fuzzy match if pattern is short enough
+            if (comp.length <= BITAP_LIMIT) {
+                try {
+                    matchIdx = dmp.match_main(text.toLowerCase(), comp.toLowerCase(), searchStart);
+                    if (matchIdx !== -1) {
+                        return [matchIdx, matchIdx + comp.length];
+                    }
+                } catch {
+                    // If fuzzy match fails, skip to next position
+                    return null;
+                }
+            }
+
+            return null;
+        };
+
+        // Process each mapping
+        mappings.forEach((mapping: SummaryCodeMapping, localIdx: number) => {
+            const comp = mapping.summaryComponent;
+            if (!comp) return;
+
+            let searchStart = 0;
+            while (searchStart < text.length) {
+                const match = findBestMatch(comp, searchStart);
+                if (!match) break;
+
+                const [matchIdx, matchEnd] = match;
+                if (!isOverlapping(matchIdx, matchEnd)) {
+                    // Found a non-overlapping match
+                    used.push([matchIdx, matchEnd]);
+
+                    // Add text before the match
+                    if (cursor < matchIdx) {
+                        elements.push(
+                            <span key={`plain-${localIdx}-${cursor}`}>
+                                {text.slice(cursor, matchIdx)}
+                            </span>
+                        );
+                    }
+
+                    // Add the highlighted match
+                    const globalIdx = globalIndices ? globalIndices[localIdx] : localIdx;
+                    elements.push(
+                        <span
+                            key={`map-${localIdx}`}
+                            style={{
+                                background: SUMMARY_CODE_MAPPING_COLORS[globalIdx % SUMMARY_CODE_MAPPING_COLORS.length] +
+                                    (activeMappingIndex === globalIdx ? "CC" : "40"),
+                                borderRadius: BORDER_RADIUS.SMALL,
+                                padding: "0 2px",
+                                margin: "0 1px",
+                                cursor: "pointer",
+                                transition: "background 0.15s"
+                            }}
+                            onMouseEnter={() => onMappingHover && onMappingHover(globalIdx)}
+                            onMouseLeave={() => onMappingHover && onMappingHover(null)}
+                        >
+                            {text.slice(matchIdx, matchEnd)}
+                        </span>
+                    );
+
+                    cursor = matchEnd;
+                    return;
+                }
+
+                // If overlapping, continue searching
+                searchStart = matchIdx + 1;
+            }
+
+            // Log if no match found and not bullet
+            if (!isBullet) {
+                console.error(
+                    "[SummaryDisplay] Could not match summaryComponent in summary (non-overlapping):",
+                    { summaryComponent: comp, summaryText: text }
+                );
+            }
+        });
+
+        // Add remaining text
+        if (cursor < text.length) {
+            elements.push(
+                <span key="plain-end">{text.slice(cursor)}</span>
+            );
+        }
+
+        return isBullet ? (
+            <div style={{ display: "flex", alignItems: "flex-start" }}>
+                <span style={{ marginRight: 4 }}>•</span>
+                <span>{elements}</span>
+            </div>
+        ) : elements;
     };
 
     return (
@@ -88,11 +226,29 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                         background: "none",
                         border: "none"
                     }}>
-                        {selectedLevel === "concise" && (summary.concise || <span style={{ color: COLORS.DESCRIPTION }}>Concise summary...</span>)}
-                        {selectedLevel === "detailed" && (summary.detailed || <span style={{ color: COLORS.DESCRIPTION }}>Detailed summary...</span>)}
+                        {selectedLevel === "concise" &&
+                            renderSummaryWithMapping(summary.concise || "", summaryCodeMappings)
+                        }
+                        {selectedLevel === "detailed" &&
+                            renderSummaryWithMapping(summary.detailed || "", summaryCodeMappings)
+                        }
                         {selectedLevel === "bullets" && (
                             summary.bullets.length > 0
-                                ? summary.bullets.filter(Boolean).map((item) => `• ${item}`).join("\n")
+                                ? summary.bullets.filter(Boolean).map((item) => {
+                                    const matchingMappingsWithIdx = (summaryCodeMappings || [])
+                                        .map((mapping, idx) => {
+                                            if (!mapping.summaryComponent) return null;
+                                            return { mapping, idx };
+                                        })
+                                        .filter(Boolean) as { mapping: SummaryCodeMapping, idx: number }[];
+
+                                    return renderSummaryWithMapping(
+                                        item,
+                                        matchingMappingsWithIdx.map(m => m.mapping),
+                                        matchingMappingsWithIdx.map(m => m.idx),
+                                        true
+                                    );
+                                })
                                 : <span style={{ color: COLORS.DESCRIPTION }}>Bulleted summary...</span>
                         )}
                     </pre>

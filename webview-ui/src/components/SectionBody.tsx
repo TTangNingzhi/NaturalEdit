@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import SummaryDisplay from "./SummaryDisplay.js";
 import PromptPanel from "./PromptPanel.js";
+import CodeBlockWithMapping from "./CodeBlockWithMapping";
 import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
 import { COLORS, SPACING } from "../styles/constants.js";
 
@@ -22,7 +23,14 @@ const SectionBody: React.FC<SectionBodyProps> = ({
     const {
         summaryData,
         selectedLevel,
+        summaryMappings
     } = section;
+
+    // State for the currently active mapping index (for bidirectional highlight)
+    const [activeMappingIndex, setActiveMappingIndex] = useState<number | null>(null);
+
+    // Get the mapping array for the current summary level
+    const rawMappings = summaryMappings?.[selectedLevel] || [];
 
     return (
         <div style={{
@@ -34,7 +42,18 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                 selectedLevel={selectedLevel}
                 onLevelChange={onLevelChange}
                 onEditPrompt={onEditPrompt}
+                summaryCodeMappings={rawMappings}
+                activeMappingIndex={activeMappingIndex}
+                onMappingHover={setActiveMappingIndex}
             />
+            {/* Code block with mapping highlights */}
+            <div style={{ marginBottom: SPACING.MEDIUM }}>
+                <CodeBlockWithMapping
+                    code={section.metadata.originalCode}
+                    mappings={rawMappings}
+                    activeMappingIndex={activeMappingIndex}
+                />
+            </div>
             <PromptPanel
                 section={section}
             />

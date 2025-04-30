@@ -27,6 +27,20 @@ export const COLORS = {
 } as const;
 
 /**
+ * Color palette for summary-code mapping highlights (up to 7 mappings).
+ * These are high-contrast, visually distinct colors.
+ */
+export const SUMMARY_CODE_MAPPING_COLORS = [
+    "#A3D3FF", // blue
+    "#FFB3C6", // pink
+    "#B9FBC0", // green
+    "#FFD6A5", // orange
+    "#D0BFFF", // purple
+    "#FFFACD", // yellow
+    "#FFDAC1"  // peach
+] as const;
+
+/**
  * Spacing constants for consistent layout
  */
 export const SPACING = {

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction } from '../llm/llmApi';
+import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction, buildSummaryMapping } from '../llm/llmApi';
 import { getLastActiveEditor } from '../extension';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -60,6 +60,15 @@ async function handleGetSummary(
         const summary = await getCodeSummary(selectedText);
         const { filename, fullPath, lines } = getFileInfo(editor);
 
+        // Build mapping for each summary level
+        const conciseMappings = await buildSummaryMapping(selectedText, summary.concise);
+        console.log('conciseMappings', conciseMappings);
+        const detailedMappings = await buildSummaryMapping(selectedText, summary.detailed);
+        console.log('detailedMappings', detailedMappings);
+        // For bullets, merge all bullet mappings into one array (or could be per bullet if needed)
+        const bulletsMappings = await buildSummaryMapping(selectedText, summary.bullets.join(" "));
+        console.log('bulletsMappings', bulletsMappings);
+
         webviewContainer.webview.postMessage({
             command: 'summaryResult',
             data: summary,
@@ -70,7 +79,12 @@ async function handleGetSummary(
             concise: summary.concise,
             lastOpened: new Date().toLocaleString(),
             originalCode: selectedText,
-            offset: editor ? editor.document.offsetAt(editor.selection.start) : 0
+            offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
+            summaryMappings: {
+                concise: conciseMappings,
+                detailed: detailedMappings,
+                bullets: bulletsMappings
+            }
         });
     } catch (err: any) {
         webviewContainer.webview.postMessage({

@@ -36,7 +36,8 @@ export const setupMessageHandler = (
                         summaryData: msg.data,
                         selectedLevel: "concise",
                         editPromptLevel: null,
-                        editPromptValue: ""
+                        editPromptValue: "",
+                        summaryMappings: msg.summaryMappings || { concise: [], detailed: [], bullets: [] }
                     });
                 }
             } else if ("command" in message && message.command === "editResult" && onEditResult) {
