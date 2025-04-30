@@ -5,17 +5,34 @@ import { v4 as uuidv4 } from "uuid";
 /**
  * Handle messages from VSCode
  */
+/**
+ * Handle messages from VSCode, including progress updates.
+ * @param onError Callback for error messages
+ * @param onNewSection Callback for new summary section
+ * @param onEditResult Callback for edit results (optional)
+ * @param onProgress Callback for progress updates (optional)
+ */
 export const setupMessageHandler = (
     onError: (error: string) => void,
     onNewSection: (section: SectionData) => void,
-    onEditResult?: (sectionId: string, action: string, newCode: string) => void
+    onEditResult?: (sectionId: string, action: string, newCode: string) => void,
+    onProgress?: (stageText: string) => void
 ) => {
+    interface ProgressMessage {
+        command: "summaryProgress";
+        stageText: string;
+    }
+
     const handleMessage = (message: unknown) => {
         if (
             typeof message === "object" &&
             message !== null
         ) {
-            if ("command" in message && message.command === "summaryResult") {
+            // Handle summary progress updates
+            if ("command" in message && message.command === "summaryProgress" && onProgress) {
+                // Call the progress callback with the current stage text
+                onProgress((message as ProgressMessage).stageText || "Summarizing...");
+            } else if ("command" in message && message.command === "summaryResult") {
                 const msg = message as SummaryResultMessage;
                 if (msg.error) {
                     onError(msg.error);
@@ -162,10 +179,19 @@ export const sendPromptToSummary = (
  * @param setSectionList Section list state setter
  * @returns A function to setup the message handler
  */
+/**
+ * Create a message handler with state management, including progress updates.
+ * @param setLoading Loading state setter
+ * @param setError Error state setter
+ * @param setSectionList Section list state setter
+ * @param setLoadingText Loading text setter (for progress updates)
+ * @returns A function to setup the message handler
+ */
 export const createStatefulMessageHandler = (
     setLoading: (loading: boolean) => void,
     setError: (error: string | null) => void,
-    setSectionList: React.Dispatch<React.SetStateAction<SectionData[]>>
+    setSectionList: React.Dispatch<React.SetStateAction<SectionData[]>>,
+    setLoadingText?: (text: string) => void
 ): () => void => {
     return () => setupMessageHandler(
         (error) => {
@@ -186,6 +212,8 @@ export const createStatefulMessageHandler = (
                     )
                 );
             }
-        }
+        },
+        // Progress callback: update loading text if provided
+        setLoadingText
     );
 };

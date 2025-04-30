@@ -15,18 +15,33 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
     const [sectionList, setSectionList] = useState<SectionData[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // State for loading text (progress message)
+    const [loadingText, setLoadingText] = useState("Summarizing...");
 
-    // Setup message handler
+    // Setup message handler with progress callback
     useEffect(() => {
-        createStatefulMessageHandler(setLoading, setError, setSectionList)();
+        createStatefulMessageHandler(setLoading, setError, setSectionList, setLoadingText)();
     }, []);
 
     // Handler: Summarize Selected Code
     const handleRequestSummary = () => {
         setLoading(true);
         setError(null);
+        setLoadingText("Summarizing..."); // Reset to default at start
         requestSummary();
     };
+
+    // Reset loading text on error or when not loading
+    useEffect(() => {
+        if (!loading) {
+            setLoadingText("Summarizing...");
+        }
+    }, [loading]);
+    useEffect(() => {
+        if (error) {
+            setLoadingText("Summarizing...");
+        }
+    }, [error]);
 
     // Update parent component when sections change
     useEffect(() => {
@@ -68,7 +83,8 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
                         }}
                     />
                 )}
-                {loading ? "Summarizing..." : "Summarize Selected Code"}
+                {/* Show progress text if loading, otherwise default button text */}
+                {loading ? loadingText : "Summarize Selected Code"}
             </VSCodeButton>
             {error && (
                 <div style={{
@@ -84,4 +100,4 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
             />
         </div>
     );
-} 
+}

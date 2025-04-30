@@ -57,18 +57,44 @@ async function handleGetSummary(
     }
 
     try {
+        // Stage 1: Generating summary
+        webviewContainer.webview.postMessage({
+            command: 'summaryProgress',
+            stage: 1,
+            stageText: 'Generating summary...'
+        });
         const summary = await getCodeSummary(selectedText);
         const { filename, fullPath, lines } = getFileInfo(editor);
 
-        // Build mapping for each summary level
+        // Stage 2: Mapping concise summary
+        webviewContainer.webview.postMessage({
+            command: 'summaryProgress',
+            stage: 2,
+            stageText: 'Mapping concise summary...'
+        });
         const conciseMappings = await buildSummaryMapping(selectedText, summary.concise);
         console.log('conciseMappings', conciseMappings);
+
+        // Stage 3: Mapping detailed summary
+        webviewContainer.webview.postMessage({
+            command: 'summaryProgress',
+            stage: 3,
+            stageText: 'Mapping detailed summary...'
+        });
         const detailedMappings = await buildSummaryMapping(selectedText, summary.detailed);
         console.log('detailedMappings', detailedMappings);
+
+        // Stage 4: Mapping bullet points
+        webviewContainer.webview.postMessage({
+            command: 'summaryProgress',
+            stage: 4,
+            stageText: 'Mapping bullet points...'
+        });
         // For bullets, merge all bullet mappings into one array (or could be per bullet if needed)
         const bulletsMappings = await buildSummaryMapping(selectedText, summary.bullets.join(" "));
         console.log('bulletsMappings', bulletsMappings);
 
+        // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({
             command: 'summaryResult',
             data: summary,
