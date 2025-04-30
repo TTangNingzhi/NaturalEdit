@@ -142,11 +142,15 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         />
                     ) : (
                         <button
-                            style={COMMON_STYLES.ICON_BUTTON}
                             title="Send Direct Prompt"
                             onClick={handleDirectPromptSend}
-                            disabled={!directPrompt.trim()}
+                            disabled={!directPrompt.trim() || loading.prompt1}
                             aria-label="Send Direct Prompt"
+                            style={{
+                                ...COMMON_STYLES.ICON_BUTTON,
+                                opacity: (!directPrompt.trim() || loading.prompt1) ? 0.5 : 1,
+                                cursor: (!directPrompt.trim() || loading.prompt1) ? "not-allowed" : "pointer"
+                            }}
                         >
                             <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />
                         </button>
@@ -226,10 +230,14 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         />
                     ) : (
                         <button
-                            style={COMMON_STYLES.ICON_BUTTON}
+                            style={{
+                                ...COMMON_STYLES.ICON_BUTTON,
+                                opacity: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2) ? 0.5 : 1,
+                                cursor: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2) ? "not-allowed" : "pointer"
+                            }}
                             title="Send Summary Prompt"
                             onClick={handleSummaryCommit}
-                            disabled={!currentSummary.trim() || !localEditPromptLevel}
+                            disabled={!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2}
                             aria-label="Send Summary Prompt"
                         >
                             <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />

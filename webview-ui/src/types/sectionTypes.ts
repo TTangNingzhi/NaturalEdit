@@ -56,14 +56,11 @@ export interface SectionData {
     lines: [number, number];
     title: string;
     concise: string;
-    lastOpened: number;
+    createdAt: number;
     summaryData: SummaryData;
     selectedLevel: SummaryLevel;
     editPromptLevel: SummaryLevel | null;
     editPromptValue: string;
-    /**
-     * Mappings for each summary level (concise, detailed, bulleted).
-     */
     summaryMappings: {
         concise: SummaryCodeMapping[];
         detailed: SummaryCodeMapping[];
@@ -80,13 +77,10 @@ export interface SummaryResultMessage {
     lines?: string;
     title?: string;
     concise?: string;
-    lastOpened?: string;
+    createdAt?: string;
     originalCode?: string;
     fullPath?: string;
     offset?: number;
-    /**
-     * Mappings for each summary level (concise, detailed, bulleted).
-     */
     summaryMappings?: {
         concise: SummaryCodeMapping[];
         detailed: SummaryCodeMapping[];

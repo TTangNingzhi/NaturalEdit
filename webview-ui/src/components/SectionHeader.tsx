@@ -1,38 +1,30 @@
 import React from "react";
 import { getFileIcon } from "../utils/fileIcons.js";
 import { FONT_SIZE, COLORS, SPACING, COMMON_STYLES } from "../styles/constants.js";
+import { SectionData } from "../types/sectionTypes.js";
 
 interface SectionHeaderProps {
-    title: string;
-    filename: string;
-    lines: [number, number];
-    concise: string;
-    lastOpened: number;
+    section: SectionData;
     collapsed: boolean;
     onToggle: () => void;
 }
 
 interface HeaderContentProps {
-    title: string;
-    filename: string;
-    lines: [number, number];
-    lastOpened: number;
-    concise?: string;
+    section: SectionData;
     showChevron: boolean;
     chevronDirection: 'right' | 'down';
     collapsed: boolean;
 }
 
 const HeaderContent: React.FC<HeaderContentProps> = ({
-    title,
-    filename,
-    lines,
-    lastOpened,
-    concise,
+    section,
     showChevron,
     chevronDirection,
     collapsed
 }) => {
+    const { metadata, title, concise, createdAt, lines } = section;
+    const { filename } = metadata;
+
     const formatTime = (timestamp: number) => {
         const date = new Date(timestamp);
         return date.toLocaleString();
@@ -69,7 +61,7 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     fontSize: FONT_SIZE.SMALL,
                     marginRight: SPACING.MEDIUM
                 }}>
-                    {formatTime(lastOpened)}
+                    {formatTime(createdAt)}
                 </span>
                 <span style={{
                     display: "flex",
@@ -144,11 +136,7 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
  * Displays the header of a section with title, file info, and collapse/expand functionality
  */
 const SectionHeader: React.FC<SectionHeaderProps> = ({
-    title,
-    filename,
-    lines,
-    concise,
-    lastOpened,
+    section,
     collapsed,
     onToggle
 }) => {
@@ -159,11 +147,7 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
             title={collapsed ? "Expand section" : "Collapse section"}
         >
             <HeaderContent
-                title={title}
-                filename={filename}
-                lines={lines}
-                lastOpened={lastOpened}
-                concise={concise}
+                section={section}
                 showChevron={true}
                 chevronDirection={collapsed ? 'right' : 'down'}
                 collapsed={collapsed}

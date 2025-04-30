@@ -23,14 +23,6 @@ const Section: React.FC<SectionProps> = ({
     collapsed,
     onToggle
 }) => {
-    const {
-        metadata,
-        lines,
-        title,
-        concise,
-        lastOpened,
-    } = section;
-
     return (
         <div style={{
             marginBottom: SPACING.MEDIUM,
@@ -39,11 +31,7 @@ const Section: React.FC<SectionProps> = ({
             boxShadow: "0 2px 4px var(--vscode-widget-shadow), 0 0 0 1px var(--vscode-panel-border)"
         }}>
             <SectionHeader
-                title={title}
-                filename={metadata.filename}
-                lines={lines}
-                concise={concise}
-                lastOpened={lastOpened}
+                section={section}
                 collapsed={collapsed}
                 onToggle={onToggle}
             />

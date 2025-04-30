@@ -39,7 +39,21 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
 
     // Handler for toggling section open/close
     const handleToggleSection = (id: string) => {
-        setOpenedSectionId(prevId => (prevId === id ? null : id));
+        setOpenedSectionId(prevId => {
+            // If the section is being collapsed (was open and is being closed)
+            if (prevId === id) {
+                // Clear the editPromptValue for the section being collapsed
+                onSectionsChange(
+                    sections.map(s =>
+                        s.metadata.id === id
+                            ? { ...s, editPromptValue: "", editPromptLevel: null }
+                            : s
+                    )
+                );
+                return null;
+            }
+            return id;
+        });
     };
 
     return (

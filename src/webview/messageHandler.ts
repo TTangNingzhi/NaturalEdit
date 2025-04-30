@@ -358,7 +358,7 @@ async function handleGetSummary(
         webviewContainer.webview.postMessage({
             command: 'summaryProgress',
             stage: 2,
-            stageText: 'Mapping concise summary...'
+            stageText: 'Building mapping for concise summary...'
         });
         const conciseMappings = await buildSummaryMapping(selectedText, summary.concise);
         console.log('conciseMappings', conciseMappings);
@@ -367,7 +367,7 @@ async function handleGetSummary(
         webviewContainer.webview.postMessage({
             command: 'summaryProgress',
             stage: 3,
-            stageText: 'Mapping detailed summary...'
+            stageText: 'Building mapping for detailed summary...'
         });
         const detailedMappings = await buildSummaryMapping(selectedText, summary.detailed);
         console.log('detailedMappings', detailedMappings);
@@ -376,7 +376,7 @@ async function handleGetSummary(
         webviewContainer.webview.postMessage({
             command: 'summaryProgress',
             stage: 4,
-            stageText: 'Mapping bullet points...'
+            stageText: 'Building mapping for bullet points...'
         });
         const bulletsMappings = await buildSummaryMapping(selectedText, summary.bullets.join(" "));
         console.log('bulletsMappings', bulletsMappings);
@@ -390,7 +390,7 @@ async function handleGetSummary(
             lines,
             title: summary.title,
             concise: summary.concise,
-            lastOpened: new Date().toLocaleString(),
+            createdAt: new Date().toLocaleString(),
             originalCode: selectedText,
             offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
             summaryMappings: {

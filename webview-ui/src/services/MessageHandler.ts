@@ -49,7 +49,7 @@ export const setupMessageHandler = (
                         lines: [parseInt(msg.lines?.split('-')[0] || '0'), parseInt(msg.lines?.split('-')[1] || '0')],
                         title: msg.title || "Untitled",
                         concise: msg.concise || "",
-                        lastOpened: msg.lastOpened ? new Date(msg.lastOpened).getTime() : Date.now(),
+                        createdAt: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
                         summaryData: msg.data,
                         selectedLevel: "concise",
                         editPromptLevel: null,
