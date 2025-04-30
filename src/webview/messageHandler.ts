@@ -238,11 +238,6 @@ async function handleHighlightCodeMapping(message: any) {
     // Check file path match
     const editorPath = editor.document.fileName;
     if (fullPath && editorPath !== fullPath) {
-        console.warn(`[highlightCodeMapping] File path mismatch: editor=${editorPath}, expected=${fullPath}`);
-        return;
-    }
-    if (!fullPath && filename && !editorPath.endsWith(filename)) {
-        console.warn(`[highlightCodeMapping] File name mismatch: editor=${editorPath}, expected filename=${filename}`);
         return;
     }
 
@@ -312,6 +307,22 @@ async function handleClearHighlight() {
 }
 
 /**
+ * Generates file context including file name, path and content
+ * @param filePath The full path of the file
+ * @returns Formatted file context string
+ */
+async function generateFileContext(filePath: string): Promise<string> {
+    try {
+        const filename = path.basename(filePath);
+        const fileContent = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+        return `File: ${filename}\nPath: ${filePath}\n\nFile Content:\n${fileContent.toString()}`;
+    } catch (error) {
+        console.error('Error reading file for context:', error);
+        return `File: ${path.basename(filePath)}\nPath: ${filePath}\n\nFile Content:\n[Error reading file]`;
+    }
+}
+
+/**
  * Handles the getSummary command.
  */
 async function handleGetSummary(
@@ -336,8 +347,12 @@ async function handleGetSummary(
             stage: 1,
             stageText: 'Generating summary...'
         });
-        const summary = await getCodeSummary(selectedText);
-        const { filename, fullPath, lines } = getFileInfo(editor);
+        const filePath = editor?.document.fileName || '';
+        const fileContext = await generateFileContext(filePath);
+        const summary = await getCodeSummary(selectedText, fileContext);
+        const filename = editor ? path.basename(editor.document.fileName) : '';
+        const fullPath = editor?.document.fileName || '';
+        const lines = editor ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}` : '';
 
         // Stage 2: Mapping concise summary
         webviewContainer.webview.postMessage({
@@ -363,7 +378,6 @@ async function handleGetSummary(
             stage: 4,
             stageText: 'Mapping bullet points...'
         });
-        // For bullets, merge all bullet mappings into one array (or could be per bullet if needed)
         const bulletsMappings = await buildSummaryMapping(selectedText, summary.bullets.join(" "));
         console.log('bulletsMappings', bulletsMappings);
 
@@ -442,14 +456,15 @@ async function handleSummaryPrompt(
         return;
     }
 
-    const newCode = await getCodeFromSummaryEdit(originalCode, message.summaryText, message.summaryLevel);
-
-    console.log('summaryPrompt:', {
+    const filePath = fullPath || path.join(vscode.workspace.rootPath || '', filename);
+    const fileContext = await generateFileContext(filePath);
+    const newCode = await getCodeFromSummaryEdit(
         originalCode,
-        filename,
-        fullPath,
-        newCode
-    });
+        message.summaryText,
+        message.summaryLevel,
+        fileContext,
+        message.originalSummary
+    );
 
     await applyCodeChanges(webviewContainer, message, originalCode, newCode, filename, fullPath, 'summaryPrompt');
 }
@@ -472,14 +487,9 @@ async function handleDirectPrompt(
         return;
     }
 
-    console.log('directPrompt:', {
-        originalCode,
-        filename,
-        fullPath,
-        promptText: message.promptText
-    });
-
-    const newCode = await getCodeFromDirectInstruction(originalCode, message.promptText);
+    const filePath = fullPath || path.join(vscode.workspace.rootPath || '', filename);
+    const fileContext = await generateFileContext(filePath);
+    const newCode = await getCodeFromDirectInstruction(originalCode, message.promptText, fileContext);
     await applyCodeChanges(webviewContainer, message, originalCode, newCode, filename, fullPath, 'directPrompt');
 }
 

@@ -91,11 +91,10 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     const handleApplyToSummary = async () => {
         const action = "applyToSummary";
         if (editPromptLevel && directPrompt.trim()) {
-            setSummary(summary);
             setLoading(prev => ({ ...prev, [action]: true }));
             setError(prev => ({ ...prev, [action]: null }));
             try {
-                await onPromptToSummary(editPromptLevel, summary, directPrompt.trim());
+                await onPromptToSummary(editPromptLevel, originalSummary, directPrompt.trim());
                 setLoading(prev => ({ ...prev, [action]: false }));
                 setError(prev => ({ ...prev, [action]: null }));
             } catch (err: unknown) {
@@ -116,7 +115,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
             setLoading(prev => ({ ...prev, [action]: true }));
             setError(prev => ({ ...prev, [action]: null }));
             try {
-                await onSummaryPrompt(localEditPromptLevel, currentSummary.trim());
+                await onSummaryPrompt(localEditPromptLevel, currentSummary.trim(), originalSummary);
                 setLoading(prev => ({ ...prev, [action]: false }));
                 setError(prev => ({ ...prev, [action]: null }));
             } catch (err: unknown) {

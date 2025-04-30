@@ -120,6 +120,7 @@ export const sendDirectPrompt = (
  * @param filename The file name
  * @param fullPath The full file path
  * @param offset The offset in the file
+ * @param originalSummary The original summary for diff comparison
  */
 export const sendEditSummary = (
     sectionId: string,
@@ -128,7 +129,8 @@ export const sendEditSummary = (
     originalCode: string,
     filename: string,
     fullPath: string,
-    offset: number
+    offset: number,
+    originalSummary: string
 ) => {
     vscodeApi.postMessage({
         command: "summaryPrompt",
@@ -138,7 +140,8 @@ export const sendEditSummary = (
         originalCode,
         filename,
         fullPath,
-        offset
+        offset,
+        originalSummary
     });
 };
 
@@ -148,6 +151,10 @@ export const sendEditSummary = (
  * @param level Summary level
  * @param summary Current summary value
  * @param prompt Direct instruction to apply
+ * @param originalCode The code to be edited
+ * @param filename The file name
+ * @param fullPath The full file path
+ * @param offset The offset in the file
  */
 export const sendPromptToSummary = (
     sectionId: string,

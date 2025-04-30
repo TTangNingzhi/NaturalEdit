@@ -57,9 +57,10 @@ async function callLLM(prompt: string, parseJson: boolean = false): Promise<any>
 /**
  * Get a multi-level summary of the given code using LLM
  * @param code The code to summarize
+ * @param fileContext The file context where the code is located
  * @returns Object containing title, concise, detailed, and bulleted summaries
  */
-export async function getCodeSummary(code: string): Promise<{
+export async function getCodeSummary(code: string, fileContext: string): Promise<{
     title: string;
     concise: string;
     detailed: string;
@@ -70,11 +71,17 @@ You are an expert code summarizer. For the following code, generate a summary in
 1. Title: 3-5 words, no more.
 2. Concise: One-sentence summary.
 3. Detailed: One detailed sentence.
-4. Bulleted: up to 6 bullet points, each concise. Each bullet in the bullets array must start with a bullet character (•).
+4. Bulleted: up to 6 bullet points (could be less), each concise. Each bullet in the bullets array must start with a bullet character (•).
 
-Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
+IMPORTANT:
+- The file context below is provided ONLY for reference to help understand the code's environment.
+- Your summary MUST focus ONLY on the specific code snippet provided.
+- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
 
-Code:
+File Context (for reference only):
+${fileContext}
+
+Code to summarize:
 ${code}
 `;
 
@@ -170,18 +177,33 @@ ${summaryText}
  * @param originalCode The original code to modify
  * @param editedSummary The edited summary that describes the desired changes
  * @param summaryLevel The level of the summary (concise, detailed, or bullets)
+ * @param fileContext The file context where the code is located
+ * @param originalSummary The original summary before editing
  * @returns The modified code
  */
-export async function getCodeFromSummaryEdit(originalCode: string, editedSummary: string, summaryLevel: string): Promise<string> {
+export async function getCodeFromSummaryEdit(
+    originalCode: string,
+    editedSummary: string,
+    summaryLevel: string,
+    fileContext: string,
+    originalSummary: string
+): Promise<string> {
     const prompt = `
-You are an expert code editor. Given the following original code and an updated summary (${summaryLevel}), update the code to reflect the new summary.
-- Only change the code as needed to match the new summary.
-- Keep the rest of the code unchanged.
+You are an expert code editor. Given the following original code and an updated summary (${summaryLevel}), update the code to reflect the changes in the new summary.
+- The file context below is provided ONLY for reference to help understand the code's environment, and your code changes MUST focus ONLY on the specific code snippet provided.
+- Only change the code as needed to match the new summary, and keep the rest of the code unchanged.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
+- Pay close attention to the differences between the original summary and the edited summary, which reflects developer's intent of what the new code should be.
 - Output only the updated code, nothing else.
+
+File Context (for reference only):
+${fileContext}
 
 Original code:
 ${originalCode}
+
+Original summary (${summaryLevel}):
+${originalSummary}
 
 Updated summary (${summaryLevel}):
 ${editedSummary}
@@ -197,15 +219,23 @@ Updated code:
  * Get code changes based on a direct instruction
  * @param originalCode The original code to modify
  * @param instruction The direct instruction for code changes
+ * @param fileContext The file context where the code is located
  * @returns The modified code
  */
-export async function getCodeFromDirectInstruction(originalCode: string, instruction: string): Promise<string> {
+export async function getCodeFromDirectInstruction(
+    originalCode: string,
+    instruction: string,
+    fileContext: string
+): Promise<string> {
     const prompt = `
 You are an expert code editor. Given the following original code and a direct instruction, update the code to fulfill the instruction.
-- Only change the code as needed to satisfy the instruction.
-- Keep the rest of the code unchanged.
+- The file context below is provided ONLY for reference to help understand the code's environment, and your code changes MUST focus ONLY on the specific code snippet provided.
+- Only change the code as needed to satisfy the instruction, and keep the rest of the code unchanged.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - Output only the updated code, nothing else.
+
+File Context (for reference only):
+${fileContext}
 
 Original code:
 ${originalCode}
@@ -222,7 +252,7 @@ Updated code:
 
 /**
  * Get summary changes based on a direct instruction
- * @param originalCode The original code context (optional)
+ * @param originalCode The original code context
  * @param originalSummary The original summary to modify
  * @param summaryLevel The level of the summary (concise, detailed, or bullets)
  * @param instruction The direct instruction for summary changes
@@ -235,19 +265,28 @@ export async function getSummaryFromInstruction(
     instruction: string
 ): Promise<string> {
     const prompt = `
-You are an expert at editing summaries. Given the following original summary and a direct instruction, update the summary to fulfill the instruction.
-- The new summary must incorporate ALL information from the direct instruction.
-- Preserve ALL parts of the original summary that are not affected by the instruction.
+You are an expert at editing code summaries. In this scenario, a developer is using a summary-mediated approach to modify code:
+1. Instead of directly editing the code, the developer modifies the summary to express their desired code behavior.
+2. The modified summary will later be used to generate the actual code changes.
+3. Your task is to integrate the developer's instruction into the summary, making it clear what the new code should do.
+
+Given the following original summary and a direct instruction, update the summary to incorporate the developer's intent:
+- The code context below is provided ONLY for reference to help understand the summary's environment.
+- Preserve the parts of the original summary that are not affected by the instruction.
 - Maintain the original summary format (sentence, bullet points, etc.).
-- When possible, integrate the instruction's changes into existing sentences or bullet points.
-- Only add new sentences or bullet points if the instruction cannot be naturally integrated into existing ones.
 - Make it easy to identify what changed by keeping unchanged parts exactly as they were.
+- Integrate the instruction seamlessly into existing sentences or bullet points as much as possible.
+- However, add new sentences or bullet points if the instruction cannot be naturally integrated into existing ones.
+- The updated summary MUST clearly express what the new code should do, incorporating ALL information from the instruction.
 - Output only the updated summary, nothing else.
+
+Code Context (for reference only):
+${originalCode}
 
 Original summary (${summaryLevel}):
 ${originalSummary}
 
-Instruction:
+Developer's instruction (integrate this intent fully into the updated summary):
 ${instruction}
 
 Updated summary:

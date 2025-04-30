@@ -8,7 +8,7 @@ import { SummaryLevel, SectionMetadata } from '../types/sectionTypes.js';
 export interface PromptContextType {
     onDirectPrompt: (metadata: SectionMetadata) => (prompt: string) => Promise<void>;
     onPromptToSummary: (metadata: SectionMetadata) => (level: SummaryLevel, summary: string, prompt: string) => Promise<void>;
-    onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string) => Promise<void>;
+    onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string, originalSummary: string) => Promise<void>;
 }
 
 export const PromptContext = createContext<PromptContextType | null>(null);

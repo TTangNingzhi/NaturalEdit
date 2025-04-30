@@ -56,7 +56,7 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 );
             });
         },
-        onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string) => {
+        onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string, originalSummary: string) => {
             return new Promise<void>((resolve, reject) => {
                 const listener = (event: MessageEvent) => {
                     const message = event.data;
@@ -77,7 +77,8 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     metadata.originalCode,
                     metadata.filename,
                     metadata.fullPath,
-                    metadata.offset
+                    metadata.offset,
+                    originalSummary
                 );
             });
         }
