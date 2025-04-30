@@ -6,6 +6,22 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 
+// Color palette for summary-code mapping highlights (must match frontend)
+const SUMMARY_CODE_MAPPING_COLORS = [
+    "#A3D3FF", // blue
+    "#FFB3C6", // pink
+    "#B9FBC0", // green
+    "#FFD6A5", // orange
+    "#D0BFFF", // purple
+    "#FFFACD", // yellow
+    "#FFDAC1"  // peach
+];
+
+// Persistent variables to track current highlight decoration
+let currentHighlightDecoration: vscode.TextEditorDecorationType | null = null;
+let currentHighlightRange: vscode.Range | null = null;
+let currentHighlightEditor: vscode.TextEditor | null = null;
+
 /**
  * Map to track temp file associations for diff/accept/reject workflow.
  * Key: original file path, Value: { tempFilePath: string, range: vscode.Range }
@@ -35,7 +51,194 @@ export async function handleMessage(
         case 'promptToSummary':
             await handlePromptToSummary(message, webviewContainer);
             break;
+        case 'highlightCodeMapping':
+            await handleHighlightCodeMapping(message);
+            break;
+        case 'clearHighlight':
+            await handleClearHighlight();
+            break;
     }
+}
+
+/**
+ * Handles the highlightCodeMapping command from the webview.
+ * Finds the code snippet in the open editor and applies a highlight decoration.
+ * @param message The message containing codeSnippet, filename/fullPath, colorIndex
+ */
+async function handleHighlightCodeMapping(message: any) {
+    // Remove any previous highlight
+    await handleClearHighlight();
+
+    const editor = getLastActiveEditor();
+    if (!editor) {
+        console.warn("[highlightCodeMapping] No active editor found.");
+        return;
+    }
+
+    const { selectedCode, codeSnippets, colorIndex, filename, fullPath } = message;
+
+    if (typeof selectedCode !== "string" || !Array.isArray(codeSnippets) || typeof colorIndex !== "number") {
+        console.warn("[highlightCodeMapping] Invalid selectedCode, codeSnippets, or colorIndex.");
+        return;
+    }
+
+    // Check file path match
+    const editorPath = editor.document.fileName;
+    if (fullPath && editorPath !== fullPath) {
+        console.warn(`[highlightCodeMapping] File path mismatch: editor=${editorPath}, expected=${fullPath}`);
+        return;
+    }
+    if (!fullPath && filename && !editorPath.endsWith(filename)) {
+        console.warn(`[highlightCodeMapping] File name mismatch: editor=${editorPath}, expected filename=${filename}`);
+        return;
+    }
+
+    // Use diff-match-patch to find the selectedCode region in the document
+    let DiffMatchPatch: any;
+    try {
+        DiffMatchPatch = require('diff-match-patch');
+    } catch (e) {
+        console.error("diff-match-patch not installed in extension backend.");
+        return;
+    }
+    const dmp = new DiffMatchPatch();
+    const docText = editor.document.getText();
+    const BITAP_LIMIT = 32;
+
+    // 1. Find the selectedCode region in the file (same as applyFuzzyPatchAndReplaceInFile)
+    let regionStart = docText.indexOf(selectedCode);
+    if (regionStart === -1) {
+        regionStart = docText.toLowerCase().indexOf(selectedCode.toLowerCase());
+    }
+    if (regionStart === -1 && selectedCode.length <= BITAP_LIMIT) {
+        try {
+            regionStart = dmp.match_main(docText, selectedCode, 0);
+            if (regionStart === -1) {
+                regionStart = dmp.match_main(docText.toLowerCase(), selectedCode.toLowerCase(), 0);
+            }
+        } catch (e) { }
+    }
+    if (regionStart === -1 && selectedCode.length > BITAP_LIMIT) {
+        let bestScore = 0;
+        let bestLoc = -1;
+        for (let i = 0; i <= docText.length - BITAP_LIMIT; i++) {
+            const window = docText.substr(i, BITAP_LIMIT);
+            let score = 0;
+            try {
+                const diffs = dmp.diff_main(window, selectedCode.substr(0, BITAP_LIMIT));
+                dmp.diff_cleanupSemantic(diffs);
+                let editDistance = 0;
+                diffs.forEach((d: [number, string]) => {
+                    if (d[0] !== 0) { editDistance += d[1].length; }
+                });
+                score = (BITAP_LIMIT - editDistance) / BITAP_LIMIT;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestLoc = i;
+                }
+            } catch (e) {
+                score = 0;
+            }
+        }
+        if (bestScore > 0.9) {
+            regionStart = bestLoc;
+        }
+    }
+
+    if (regionStart === -1) {
+        console.warn("[highlightCodeMapping] Could not find selectedCode region in file.");
+        return;
+    }
+    const regionEnd = regionStart + selectedCode.length;
+    const regionText = docText.slice(regionStart, regionEnd);
+
+    // 2. For each codeSnippet, search within regionText using the same logic as CodeBlockWithMapping
+    const allRanges: vscode.Range[] = [];
+    for (const snippet of codeSnippets) {
+        if (!snippet || !snippet.trim()) { continue; }
+        const pattern = snippet.replace(/\r\n/g, "\n");
+        let loc = regionText.indexOf(pattern);
+        if (loc === -1) {
+            loc = regionText.toLowerCase().indexOf(pattern.toLowerCase());
+        }
+        if (loc === -1 && pattern.length <= BITAP_LIMIT) {
+            try {
+                loc = dmp.match_main(regionText, pattern, 0);
+                if (loc === -1) {
+                    loc = dmp.match_main(regionText.toLowerCase(), pattern.toLowerCase(), 0);
+                }
+            } catch (e) { }
+        }
+        if (loc === -1 && pattern.length > BITAP_LIMIT) {
+            let bestScore = 0;
+            let bestLoc = -1;
+            for (let i = 0; i <= regionText.length - BITAP_LIMIT; i++) {
+                const window = regionText.substr(i, BITAP_LIMIT);
+                let score = 0;
+                try {
+                    const diffs = dmp.diff_main(window, pattern.substr(0, BITAP_LIMIT));
+                    dmp.diff_cleanupSemantic(diffs);
+                    let editDistance = 0;
+                    diffs.forEach((d: [number, string]) => {
+                        if (d[0] !== 0) { editDistance += d[1].length; }
+                    });
+                    score = (BITAP_LIMIT - editDistance) / BITAP_LIMIT;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestLoc = i;
+                    }
+                } catch (e) {
+                    score = 0;
+                }
+            }
+            if (bestScore > 0.9) {
+                loc = bestLoc;
+            }
+        }
+        if (loc !== -1) {
+            // Map regionText offset to docText offset
+            const absStart = regionStart + loc;
+            const absEnd = absStart + pattern.length;
+            const start = editor.document.positionAt(absStart);
+            const end = editor.document.positionAt(absEnd);
+            allRanges.push(new vscode.Range(start, end));
+        } else {
+            console.warn("[highlightCodeMapping] Could not match codeSnippet in selectedCode region:", { snippet, selectedCode });
+        }
+    }
+
+    if (allRanges.length > 0) {
+        // Create a decoration type with the correct color and some transparency
+        const color = SUMMARY_CODE_MAPPING_COLORS[colorIndex % SUMMARY_CODE_MAPPING_COLORS.length] + "80";
+        const decorationType = vscode.window.createTextEditorDecorationType({
+            backgroundColor: color,
+            isWholeLine: false,
+            borderRadius: "3px"
+        });
+
+        // Apply the decoration to all matched ranges
+        editor.setDecorations(decorationType, allRanges);
+        // Store for later removal
+        currentHighlightDecoration = decorationType;
+        currentHighlightRange = null; // Multiple ranges, so not a single range
+        currentHighlightEditor = editor;
+    } else {
+        console.warn("[highlightCodeMapping] No code regions found to highlight.");
+    }
+}
+
+/**
+ * Handles the clearHighlight command from the webview.
+ * Removes any existing highlight decoration from the editor.
+ */
+async function handleClearHighlight() {
+    if (currentHighlightDecoration && currentHighlightEditor) {
+        currentHighlightEditor.setDecorations(currentHighlightDecoration, []);
+        currentHighlightDecoration.dispose();
+    }
+    currentHighlightDecoration = null;
+    currentHighlightRange = null;
+    currentHighlightEditor = null;
 }
 
 /**
@@ -136,7 +339,7 @@ async function handlePromptToSummary(
         message.summaryLevel,
         message.promptText
     );
-    console.log('Updated summary:', updatedSummary);
+    console.log('Updated summary (promptToSummary):', updatedSummary);
 
     // Return the updated summary to the frontend
     webviewContainer.webview.postMessage({

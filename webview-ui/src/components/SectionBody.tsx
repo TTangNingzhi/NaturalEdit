@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import SummaryDisplay from "./SummaryDisplay.js";
 import PromptPanel from "./PromptPanel.js";
-import CodeBlockWithMapping from "./CodeBlockWithMapping";
 import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
 import { COLORS, SPACING } from "../styles/constants.js";
+import { vscodeApi } from "../utils/vscodeApi"; // Import VSCode API for backend communication
 
 interface SectionBodyProps {
     section: SectionData;
@@ -32,6 +32,39 @@ const SectionBody: React.FC<SectionBodyProps> = ({
     // Get the mapping array for the current summary level
     const rawMappings = summaryMappings?.[selectedLevel] || [];
 
+    /**
+     * Handles hover events on summary mapping components.
+     * Sends highlight/clear messages to the backend and updates local highlight state.
+     * @param index The mapping index being hovered, or null if unhovered
+     */
+    const handleMappingHover = (index: number | null) => {
+        setActiveMappingIndex(index);
+
+        // Get file info from section metadata
+        const { filename, fullPath } = section.metadata;
+
+        if (index !== null && rawMappings[index]) {
+            // On hover: send highlight message with selected code, ALL code snippets, and color index
+            const codeSnippets = rawMappings[index].codeSnippets || [];
+            const selectedCode = section.metadata.originalCode || "";
+            vscodeApi.postMessage({
+                command: "highlightCodeMapping",
+                selectedCode, // send the selected code block
+                codeSnippets, // send as array
+                filename,
+                fullPath,
+                colorIndex: index
+            });
+        } else {
+            // On unhover: send clear highlight message
+            vscodeApi.postMessage({
+                command: "clearHighlight",
+                filename,
+                fullPath
+            });
+        }
+    };
+
     return (
         <div style={{
             padding: SPACING.MEDIUM,
@@ -44,16 +77,8 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                 onEditPrompt={onEditPrompt}
                 summaryCodeMappings={rawMappings}
                 activeMappingIndex={activeMappingIndex}
-                onMappingHover={setActiveMappingIndex}
+                onMappingHover={handleMappingHover}
             />
-            {/* Code block with mapping highlights */}
-            <div style={{ marginBottom: SPACING.MEDIUM }}>
-                <CodeBlockWithMapping
-                    code={section.metadata.originalCode}
-                    mappings={rawMappings}
-                    activeMappingIndex={activeMappingIndex}
-                />
-            </div>
             <PromptPanel
                 section={section}
             />

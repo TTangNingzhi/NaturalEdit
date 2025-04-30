@@ -1,3 +1,26 @@
+/**
+ * @deprecated
+ * This component is deprecated and should NOT be used in production code.
+ * It is kept only for debugging or future reference.
+ * Do NOT import or use this file elsewhere unless you are debugging mapping logic.
+ *
+ * Deprecated by: summary-to-code highlight feature (see SectionBody/SummaryDisplay).
+ *
+ * ---------------------------
+ * How to use for debugging:
+ * ---------------------------
+ * To debug summary-code mapping highlights, you can temporarily re-enable this component in SectionBody.tsx.
+ * Example usage in SectionBody:
+ *
+ *   <div style={{ marginBottom: SPACING.MEDIUM }}>
+ *     <CodeBlockWithMapping
+ *       code={section.metadata.originalCode}
+ *       mappings={rawMappings}
+ *       activeMappingIndex={activeMappingIndex}
+ *     />
+ *   </div>
+ */
+
 import React from "react";
 import { SummaryCodeMapping } from "../types/sectionTypes";
 import { FONT_SIZE, BORDER_RADIUS, SUMMARY_CODE_MAPPING_COLORS } from "../styles/constants";
