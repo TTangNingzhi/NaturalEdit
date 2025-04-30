@@ -22,7 +22,8 @@ export const COLORS = {
     ERROR: 'var(--vscode-errorForeground)',
     BACKGROUND: 'var(--vscode-panel-background)',
     BORDER: 'var(--vscode-panel-border)',
-    ACTIVE_BACKGROUND: 'var(--vscode-editorGroupHeader-tabsBackground)'
+    ACTIVE_BACKGROUND: 'var(--vscode-editorGroupHeader-tabsBackground)',
+    BUTTON_FOREGROUND: 'var(--vscode-button-foreground)'
 } as const;
 
 /**

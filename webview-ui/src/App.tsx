@@ -53,10 +53,10 @@ function App() {
         >
           {loading && (
             <ClipLoader
-              color={COLORS.FOREGROUND}
+              color={COLORS.BUTTON_FOREGROUND}
               size={FONT_SIZE.TINY}
               cssOverride={{
-                borderWidth: '3px',
+                borderWidth: '2px',
                 marginRight: SPACING.SMALL
               }}
             />

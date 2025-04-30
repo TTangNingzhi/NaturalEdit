@@ -6,9 +6,9 @@ import { SummaryLevel, SectionMetadata } from '../types/sectionTypes.js';
  * Each handler returns a function that only needs the minimal arguments.
  */
 export interface PromptContextType {
-    onDirectPrompt: (metadata: SectionMetadata) => (prompt: string) => void;
-    onPromptToSummary: (metadata: SectionMetadata) => (level: SummaryLevel, summary: string, prompt: string) => void;
-    onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string) => void;
+    onDirectPrompt: (metadata: SectionMetadata) => (prompt: string) => Promise<void>;
+    onPromptToSummary: (metadata: SectionMetadata) => (level: SummaryLevel, summary: string, prompt: string) => Promise<void>;
+    onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string) => Promise<void>;
 }
 
 export const PromptContext = createContext<PromptContextType | null>(null);

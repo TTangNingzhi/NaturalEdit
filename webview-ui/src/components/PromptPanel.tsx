@@ -5,16 +5,28 @@ import {
 } from "@vscode/webview-ui-toolkit/react/index.js";
 import { SummaryDiffEditor } from "./SummaryDiffEditor";
 import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
-import { FONT_SIZE, SPACING, COMMON_STYLES } from "../styles/constants.js";
+import { FONT_SIZE, SPACING, COMMON_STYLES, COLORS } from "../styles/constants.js";
 import { usePrompt } from "../hooks/usePrompt.js";
+import { ClipLoader } from "react-spinners";
 
 interface PromptPanelProps {
     section: SectionData;
 }
 
 const PromptPanel: React.FC<PromptPanelProps> = ({
-    section,
+    section
 }) => {
+    // Local loading and error state for each action
+    const [loading, setLoading] = useState<{ [action: string]: boolean }>({
+        applyToSummary: false,
+        prompt1: false,
+        prompt2: false,
+    });
+    const [error, setError] = useState<{ [action: string]: string | null }>({
+        applyToSummary: null,
+        prompt1: null,
+        prompt2: null,
+    });
     const { metadata, editPromptLevel, editPromptValue } = section;
     const { onDirectPrompt, onPromptToSummary, onSummaryPrompt } = usePrompt(metadata);
 
@@ -44,27 +56,84 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
         }
     }, [editPromptLevel]);
 
+    // Type guard to check if an error has a string message property
+    function isErrorWithMessage(err: unknown): err is { message: string } {
+        return (
+            typeof err === "object" &&
+            err !== null &&
+            "message" in err &&
+            typeof (err as { message: unknown }).message === "string"
+        );
+    }
+
     // Direct prompt send
-    const handleDirectPromptSend = () => {
+    const handleDirectPromptSend = async () => {
+        const action = "prompt1";
         if (directPrompt.trim()) {
-            onDirectPrompt(directPrompt.trim());
+            setLoading(prev => ({ ...prev, [action]: true }));
+            setError(prev => ({ ...prev, [action]: null }));
+            try {
+                await onDirectPrompt(directPrompt.trim());
+                setLoading(prev => ({ ...prev, [action]: false }));
+                setError(prev => ({ ...prev, [action]: null }));
+            } catch (err: unknown) {
+                let errorMsg = "Unknown error";
+                if (isErrorWithMessage(err)) {
+                    errorMsg = err.message;
+                }
+                setLoading(prev => ({ ...prev, [action]: false }));
+                setError(prev => ({ ...prev, [action]: errorMsg }));
+            }
         }
     };
 
     // Apply direct prompt to summary
-    const handleApplyToSummary = () => {
+    const handleApplyToSummary = async () => {
+        const action = "applyToSummary";
         if (editPromptLevel && directPrompt.trim()) {
             setSummary(summary);
-            onPromptToSummary(editPromptLevel, summary, directPrompt.trim());
+            setLoading(prev => ({ ...prev, [action]: true }));
+            setError(prev => ({ ...prev, [action]: null }));
+            try {
+                await onPromptToSummary(editPromptLevel, summary, directPrompt.trim());
+                setLoading(prev => ({ ...prev, [action]: false }));
+                setError(prev => ({ ...prev, [action]: null }));
+            } catch (err: unknown) {
+                let errorMsg = "Unknown error";
+                if (isErrorWithMessage(err)) {
+                    errorMsg = err.message;
+                }
+                setLoading(prev => ({ ...prev, [action]: false }));
+                setError(prev => ({ ...prev, [action]: errorMsg }));
+            }
         }
     };
 
     // Commit summary to backend
-    const handleSummaryCommit = () => {
+    const handleSummaryCommit = async () => {
+        const action = "prompt2";
         if (localEditPromptLevel && currentSummary.trim()) {
-            onSummaryPrompt(localEditPromptLevel, currentSummary.trim());
+            setLoading(prev => ({ ...prev, [action]: true }));
+            setError(prev => ({ ...prev, [action]: null }));
+            try {
+                await onSummaryPrompt(localEditPromptLevel, currentSummary.trim());
+                setLoading(prev => ({ ...prev, [action]: false }));
+                setError(prev => ({ ...prev, [action]: null }));
+            } catch (err: unknown) {
+                let errorMsg = "Unknown error";
+                if (isErrorWithMessage(err)) {
+                    errorMsg = err.message;
+                }
+                setLoading(prev => ({ ...prev, [action]: false }));
+                setError(prev => ({ ...prev, [action]: errorMsg }));
+            }
         }
     };
+
+    // Debug: log loading state changes
+    useEffect(() => {
+        console.log("Loading state changed:", loading);
+    }, [loading]);
 
     return (
         <div style={COMMON_STYLES.SECTION_COMPACT}>
@@ -72,15 +141,22 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
             <div style={{ marginBottom: SPACING.MEDIUM }}>
                 <div style={COMMON_STYLES.SECTION_HEADER}>
                     <span style={COMMON_STYLES.SECTION_LABEL}>Direct Instruction Prompt</span>
-                    <button
-                        style={COMMON_STYLES.ICON_BUTTON}
-                        title="Send Direct Prompt"
-                        onClick={handleDirectPromptSend}
-                        disabled={!directPrompt.trim()}
-                        aria-label="Send Direct Prompt"
-                    >
-                        <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />
-                    </button>
+                    {loading.prompt1 ? (
+                        <ClipLoader
+                            color={COLORS.FOREGROUND}
+                            size={FONT_SIZE.SMALL}
+                        />
+                    ) : (
+                        <button
+                            style={COMMON_STYLES.ICON_BUTTON}
+                            title="Send Direct Prompt"
+                            onClick={handleDirectPromptSend}
+                            disabled={!directPrompt.trim()}
+                            aria-label="Send Direct Prompt"
+                        >
+                            <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />
+                        </button>
+                    )}
                 </div>
                 <VSCodeTextArea
                     value={directPrompt}
@@ -97,7 +173,8 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     disabled={
                         !directPrompt.trim() ||
                         !editPromptLevel ||
-                        !summary.trim()
+                        !summary.trim() ||
+                        loading.applyToSummary
                     }
                     style={{
                         display: "flex",
@@ -107,12 +184,38 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     title="Apply instruction to summary"
                     aria-label="Apply instruction to summary"
                 >
-                    <span className="codicon codicon-arrow-down" style={{
-                        fontSize: FONT_SIZE.ICON,
-                        marginRight: SPACING.SMALL
-                    }} />
-                    Apply to Summary
+                    {loading.applyToSummary ? (
+                        <>
+                            <ClipLoader
+                                color={COLORS.BUTTON_FOREGROUND}
+                                size={FONT_SIZE.TINY}
+                                cssOverride={{
+                                    borderWidth: '2px',
+                                    marginRight: SPACING.SMALL
+                                }}
+                            />
+                            Applying...
+                        </>
+                    ) : (
+                        <>
+                            <span className="codicon codicon-arrow-down" style={{
+                                fontSize: FONT_SIZE.ICON,
+                                marginRight: SPACING.SMALL
+                            }} />
+                            Apply to Summary
+                        </>
+                    )}
                 </VSCodeButton>
+                {error.prompt1 && (
+                    <div style={{ color: COLORS.ERROR, marginTop: SPACING.TINY }}>
+                        {error.prompt1}
+                    </div>
+                )}
+                {error.applyToSummary && (
+                    <div style={{ color: COLORS.ERROR, marginTop: SPACING.TINY }}>
+                        {error.applyToSummary}
+                    </div>
+                )}
             </div>
 
             {/* Summary-Mediated Prompt Section */}
@@ -122,15 +225,22 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         Summary-Mediated Prompt
                         {localEditPromptLevel ? ` (${localEditPromptLevel.charAt(0).toUpperCase() + localEditPromptLevel.slice(1)})` : ""}
                     </span>
-                    <button
-                        style={COMMON_STYLES.ICON_BUTTON}
-                        title="Send Summary"
-                        onClick={handleSummaryCommit}
-                        disabled={!currentSummary.trim() || !localEditPromptLevel}
-                        aria-label="Send Summary"
-                    >
-                        <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />
-                    </button>
+                    {loading.prompt2 ? (
+                        <ClipLoader
+                            color={COLORS.FOREGROUND}
+                            size={FONT_SIZE.SMALL}
+                        />
+                    ) : (
+                        <button
+                            style={COMMON_STYLES.ICON_BUTTON}
+                            title="Send Summary Prompt"
+                            onClick={handleSummaryCommit}
+                            disabled={!currentSummary.trim() || !localEditPromptLevel}
+                            aria-label="Send Summary Prompt"
+                        >
+                            <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />
+                        </button>
+                    )}
                 </div>
                 <SummaryDiffEditor
                     originalSummary={originalSummary}
@@ -140,6 +250,11 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         setCurrentSummary(valueStr);
                     }}
                 />
+                {error.prompt2 && (
+                    <div style={{ color: COLORS.ERROR, marginTop: SPACING.TINY }}>
+                        {error.prompt2}
+                    </div>
+                )}
             </div>
         </div>
     );

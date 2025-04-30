@@ -167,33 +167,41 @@ async function applyFuzzyPatchAndReplaceInFile(
     newCode: string,
     offset: number
 ): Promise<{ success: boolean; patchedText?: string; error?: string }> {
-    const fileText = document.getText();
-    const DiffMatchPatch = require('diff-match-patch');
-    const dmp = new DiffMatchPatch();
-    const loc = dmp.match_main(fileText, originalCode, offset);
+    try {
+        const fileText = document.getText();
+        const DiffMatchPatch = require('diff-match-patch');
+        const dmp = new DiffMatchPatch();
+        const loc = dmp.match_main(fileText, originalCode, offset);
 
-    if (loc === -1) {
-        return { success: false, error: "Could not find the original code in the file. The code may have changed too much." };
+        if (loc === -1) {
+            return { success: false, error: "Could not find the original code in the file. The code may have changed too much." };
+        }
+
+        const patchList = dmp.patch_make(originalCode, newCode);
+        const [patchedText, results] = dmp.patch_apply(patchList, originalCode);
+
+        if (results.some((applied: boolean) => !applied)) {
+            return { success: false, error: "Failed to apply patch. The code may have changed too much since the summary was generated." };
+        }
+
+        const edit = new vscode.WorkspaceEdit();
+        const start = document.positionAt(loc);
+        const end = document.positionAt(loc + originalCode.length);
+        edit.replace(fileUri, new vscode.Range(start, end), patchedText);
+
+        const success = await vscode.workspace.applyEdit(edit);
+        if (!success) {
+            return { success: false, error: "Failed to apply edit to the file." };
+        }
+
+        return { success: true, patchedText };
+    } catch (error) {
+        console.error('Error applying patch:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "An unexpected error occurred while applying changes."
+        };
     }
-
-    const patchList = dmp.patch_make(originalCode, newCode);
-    const [patchedText, results] = dmp.patch_apply(patchList, originalCode);
-
-    if (results.some((applied: boolean) => !applied)) {
-        return { success: false, error: "Failed to apply patch. The code may have changed too much since the summary was generated." };
-    }
-
-    const edit = new vscode.WorkspaceEdit();
-    const start = document.positionAt(loc);
-    const end = document.positionAt(loc + originalCode.length);
-    edit.replace(fileUri, new vscode.Range(start, end), patchedText);
-
-    const success = await vscode.workspace.applyEdit(edit);
-    if (!success) {
-        return { success: false, error: "Failed to apply edit to the file." };
-    }
-
-    return { success: true, patchedText };
 }
 
 /**
@@ -245,63 +253,84 @@ async function applyCodeChanges(
     fullPath: string,
     action: 'directPrompt' | 'summaryPrompt'
 ) {
-    const fileInfo = await openFile(filename, fullPath);
-    if (!fileInfo) {
+    try {
+        const editor = await getLastActiveEditor();
+        if (!editor) {
+            webviewContainer.webview.postMessage({
+                command: 'editResult',
+                sectionId: message.sectionId,
+                action,
+                error: "No active editor found."
+            });
+            return;
+        }
+
+        const fileInfo = await openFile(filename, fullPath);
+        if (!fileInfo) {
+            webviewContainer.webview.postMessage({
+                command: 'editResult',
+                sectionId: message.sectionId,
+                action,
+                error: `File not found: ${filename}. Please check that the file exists in your workspace.`
+            });
+            return;
+        }
+
+        const { document, fileUri } = fileInfo;
+        const offset = typeof message.offset === "number" ? message.offset : 0;
+
+        // --- Save original code to a temp file before patching ---
+        // Generate a unique temp file path
+        const tempFilePath = path.join(os.tmpdir(), `naturaledit_${uuidv4()}_${filename}`);
+        // Write the original code to the temp file
+        fs.writeFileSync(tempFilePath, document.getText(), 'utf8');
+
+        // Track the temp file for this file
+        diffStateMap.set(fileUri.fsPath, { tempFilePath });
+
+        // --- Apply the patch ---
+        const result = await applyFuzzyPatchAndReplaceInFile(fileUri, document, originalCode, newCode, offset);
+
+        if (!result.success) {
+            webviewContainer.webview.postMessage({
+                command: 'editResult',
+                sectionId: message.sectionId,
+                action,
+                error: result.error
+            });
+            // Clean up temp file if patch failed
+            try { fs.unlinkSync(tempFilePath); } catch { }
+            diffStateMap.delete(fileUri.fsPath);
+            return;
+        }
+
+        // --- Open the diff view between temp file (original) and modified file ---
+        const tempFileUri = vscode.Uri.file(tempFilePath);
+        await vscode.commands.executeCommand(
+            'vscode.diff',
+            tempFileUri,
+            fileUri,
+            `Review Edits: ${filename}`
+        );
+
+        // Optionally, focus the diff editor (VSCode will usually do this automatically)
+
+        // --- Notify frontend as before ---
         webviewContainer.webview.postMessage({
             command: 'editResult',
             sectionId: message.sectionId,
             action,
-            error: `File not found: ${filename}. Please check that the file exists in your workspace.`
+            newCode: result.patchedText
         });
-        return;
-    }
-
-    const { document, fileUri } = fileInfo;
-    const offset = typeof message.offset === "number" ? message.offset : 0;
-
-    // --- Save original code to a temp file before patching ---
-    // Generate a unique temp file path
-    const tempFilePath = path.join(os.tmpdir(), `naturaledit_${uuidv4()}_${filename}`);
-    // Write the original code to the temp file
-    fs.writeFileSync(tempFilePath, document.getText(), 'utf8');
-
-    // Track the temp file for this file
-    diffStateMap.set(fileUri.fsPath, { tempFilePath });
-
-    // --- Apply the patch ---
-    const result = await applyFuzzyPatchAndReplaceInFile(fileUri, document, originalCode, newCode, offset);
-
-    if (!result.success) {
+    } catch (error) {
+        console.error('Error applying code changes:', error);
         webviewContainer.webview.postMessage({
             command: 'editResult',
             sectionId: message.sectionId,
             action,
-            error: result.error
+            error: error instanceof Error ? error.message : "An unexpected error occurred."
         });
-        // Clean up temp file if patch failed
-        try { fs.unlinkSync(tempFilePath); } catch { }
-        diffStateMap.delete(fileUri.fsPath);
-        return;
     }
-
-    // --- Open the diff view between temp file (original) and modified file ---
-    const tempFileUri = vscode.Uri.file(tempFilePath);
-    await vscode.commands.executeCommand(
-        'vscode.diff',
-        tempFileUri,
-        fileUri,
-        `Review Edits: ${filename}`
-    );
-
-    // Optionally, focus the diff editor (VSCode will usually do this automatically)
-
-    // --- Notify frontend as before ---
-    webviewContainer.webview.postMessage({
-        command: 'editResult',
-        sectionId: message.sectionId,
-        action,
-        newCode: result.patchedText
-    });
 }
 
 /**
