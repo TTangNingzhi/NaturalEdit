@@ -130,11 +130,6 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
         }
     };
 
-    // Debug: log loading state changes
-    useEffect(() => {
-        console.log("Loading state changed:", loading);
-    }, [loading]);
-
     return (
         <div style={COMMON_STYLES.SECTION_COMPACT}>
             {/* Direct Instruction Prompt Section */}
