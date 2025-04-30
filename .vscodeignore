@@ -12,3 +12,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+
+# Ignore all webview-ui files except the dist directory
+webview-ui/
+!webview-ui/dist/**
+.cursor/
