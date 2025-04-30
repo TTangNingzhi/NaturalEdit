@@ -70,7 +70,7 @@ You are an expert code summarizer. For the following code, generate a summary in
 1. Title: 3-5 words, no more.
 2. Concise: One-sentence summary.
 3. Detailed: One detailed sentence.
-4. Bulleted: up to 6 bullet points, each concise.
+4. Bulleted: up to 6 bullet points, each concise. Each bullet in the bullets array must start with a bullet character (•).
 
 Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
 
@@ -177,6 +177,7 @@ export async function getCodeFromSummaryEdit(originalCode: string, editedSummary
 You are an expert code editor. Given the following original code and an updated summary (${summaryLevel}), update the code to reflect the new summary.
 - Only change the code as needed to match the new summary.
 - Keep the rest of the code unchanged.
+- Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - Output only the updated code, nothing else.
 
 Original code:
@@ -203,6 +204,7 @@ export async function getCodeFromDirectInstruction(originalCode: string, instruc
 You are an expert code editor. Given the following original code and a direct instruction, update the code to fulfill the instruction.
 - Only change the code as needed to satisfy the instruction.
 - Keep the rest of the code unchanged.
+- Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - Output only the updated code, nothing else.
 
 Original code:

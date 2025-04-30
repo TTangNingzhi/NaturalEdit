@@ -46,13 +46,15 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
         onEditPrompt(selectedLevel, getSummaryValue(selectedLevel));
     };
 
-    // Helper to render a summary string with mapping highlights using fuzzy matching (diff-match-patch)
-    // Improved: Avoid overlapping matches for summary components
+    /**
+     * Renders a summary string with mapping highlights using fuzzy matching (diff-match-patch).
+     * This function highlights mapped components in the summary text.
+     * The logic is unified for all summary types (concise, detailed, bullets).
+     */
     const renderSummaryWithMapping = (
         text: string,
         mappings: SummaryCodeMapping[],
-        globalIndices?: number[],
-        isBullet: boolean = false
+        globalIndices?: number[]
     ) => {
         if (!mappings || mappings.length === 0) {
             // Fallback to plain text if no mapping
@@ -64,11 +66,11 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
         const elements: React.ReactNode[] = [];
         let cursor = 0;
 
-        // Helper to check if a range overlaps with any used range
+        // Checks if a range overlaps with any used range
         const isOverlapping = (start: number, end: number) =>
             used.some(([uStart, uEnd]) => !(end <= uStart || start >= uEnd));
 
-        // Helper to find the best match for a component
+        // Finds the best match for a component in the text
         const findBestMatch = (comp: string, searchStart: number): [number, number] | null => {
             const BITAP_LIMIT = 32; // limit for fuzzy match
 
@@ -153,8 +155,9 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                 searchStart = matchIdx + 1;
             }
 
-            // Log if no match found and not bullet
-            if (!isBullet) {
+            // Log if no match found
+            // Only log for non-empty components
+            if (comp) {
                 console.error(
                     "[SummaryDisplay] Could not match summaryComponent in summary (non-overlapping):",
                     { summaryComponent: comp, summaryText: text }
@@ -169,12 +172,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
             );
         }
 
-        return isBullet ? (
-            <div style={{ display: "flex", alignItems: "flex-start" }}>
-                <span style={{ marginRight: 4 }}>•</span>
-                <span>{elements}</span>
-            </div>
-        ) : elements;
+        return elements;
     };
 
     return (
@@ -234,21 +232,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                         }
                         {selectedLevel === "bullets" && (
                             summary.bullets.length > 0
-                                ? summary.bullets.filter(Boolean).map((item) => {
-                                    const matchingMappingsWithIdx = (summaryCodeMappings || [])
-                                        .map((mapping, idx) => {
-                                            if (!mapping.summaryComponent) return null;
-                                            return { mapping, idx };
-                                        })
-                                        .filter(Boolean) as { mapping: SummaryCodeMapping, idx: number }[];
-
-                                    return renderSummaryWithMapping(
-                                        item,
-                                        matchingMappingsWithIdx.map(m => m.mapping),
-                                        matchingMappingsWithIdx.map(m => m.idx),
-                                        true
-                                    );
-                                })
+                                ? renderSummaryWithMapping(summary.bullets.join("\n"), summaryCodeMappings)
                                 : <span style={{ color: COLORS.DESCRIPTION }}>Bulleted summary...</span>
                         )}
                     </pre>

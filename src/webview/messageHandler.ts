@@ -5,6 +5,7 @@ import { getLastActiveEditor } from '../extension';
 import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import DiffMatchPatch from 'diff-match-patch';
 
 // Color palette for summary-code mapping highlights (must match frontend)
 const SUMMARY_CODE_MAPPING_COLORS = [
@@ -17,9 +18,12 @@ const SUMMARY_CODE_MAPPING_COLORS = [
     "#FFDAC1"  // peach
 ];
 
+// Constants for code matching
+const BITAP_LIMIT = 32;
+const MIN_MATCH_SCORE = 0.9;
+
 // Persistent variables to track current highlight decoration
 let currentHighlightDecoration: vscode.TextEditorDecorationType | null = null;
-let currentHighlightRange: vscode.Range | null = null;
 let currentHighlightEditor: vscode.TextEditor | null = null;
 
 /**
@@ -27,6 +31,155 @@ let currentHighlightEditor: vscode.TextEditor | null = null;
  * Key: original file path, Value: { tempFilePath: string, range: vscode.Range }
  */
 const diffStateMap: Map<string, { tempFilePath: string }> = new Map();
+
+/**
+ * Interface for match result
+ */
+interface MatchResult {
+    location: number;
+    score?: number;
+}
+
+/**
+ * Finds the best match for a pattern in text using multiple matching strategies
+ * @param text The text to search in
+ * @param pattern The pattern to search for
+ * @param offset Starting offset for search
+ * @param options Matching options
+ * @returns MatchResult with location and optional score
+ */
+function findBestMatch(
+    text: string,
+    pattern: string,
+    offset: number = 0,
+    options: {
+        caseSensitive?: boolean;
+        useFuzzyMatch?: boolean;
+        bitapLimit?: number;
+        minScore?: number;
+    } = {}
+): MatchResult {
+    const {
+        caseSensitive = false,
+        useFuzzyMatch = true,
+        bitapLimit = BITAP_LIMIT,
+        minScore = MIN_MATCH_SCORE
+    } = options;
+
+    // 1. Try exact match
+    let location = text.indexOf(pattern, offset);
+    if (location !== -1) {
+        return { location };
+    }
+
+    // 2. Try case-insensitive match
+    if (!caseSensitive) {
+        location = text.toLowerCase().indexOf(pattern.toLowerCase(), offset);
+        if (location !== -1) {
+            return { location };
+        }
+    }
+
+    // 3. Try fuzzy match if enabled and pattern is short enough
+    if (useFuzzyMatch && pattern.length <= bitapLimit) {
+        try {
+            const dmp = new DiffMatchPatch();
+            location = dmp.match_main(text, pattern, offset);
+            if (location !== -1) {
+                return { location };
+            }
+        } catch (e) {
+            // Ignore Bitap errors
+        }
+    }
+
+    // 4. Try sliding window fuzzy match for long patterns
+    if (useFuzzyMatch && pattern.length > bitapLimit) {
+        let bestScore = 0;
+        let bestLocation = -1;
+        const dmp = new DiffMatchPatch();
+
+        for (let i = 0; i <= text.length - bitapLimit; i++) {
+            const window = text.substr(i, bitapLimit);
+            let score = 0;
+            try {
+                const diffs = dmp.diff_main(window, pattern.substr(0, bitapLimit));
+                dmp.diff_cleanupSemantic(diffs);
+                let editDistance = 0;
+                diffs.forEach((d: [number, string]) => {
+                    if (d[0] !== 0) { editDistance += d[1].length; }
+                });
+                score = (bitapLimit - editDistance) / bitapLimit;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestLocation = i;
+                }
+            } catch (e) {
+                // Ignore errors
+            }
+        }
+
+        if (bestScore >= minScore) {
+            return { location: bestLocation, score: bestScore };
+        }
+    }
+
+    return { location: -1 };
+}
+
+/**
+ * Interface for patch result
+ */
+interface PatchResult {
+    success: boolean;
+    patchedText?: string;
+    error?: string;
+}
+
+/**
+ * Applies a patch to the original text
+ * @param originalText The original text
+ * @param newText The new text to apply
+ * @param options Patch options
+ * @returns PatchResult with success status and patched text
+ */
+function applyPatch(
+    originalText: string,
+    newText: string,
+    options: {
+        preserveIndentation?: boolean;
+    } = {}
+): PatchResult {
+    const { preserveIndentation = true } = options;
+
+    try {
+        // Preserve indentation if needed
+        if (preserveIndentation) {
+            const originalFirstLineIndent = (originalText.match(/^[ \t]*/)?.[0]) || '';
+            if (originalFirstLineIndent && !/^[ \t]/.test(newText.split(/\r?\n/)[0])) {
+                newText = originalFirstLineIndent + newText;
+            }
+        }
+
+        const dmp = new DiffMatchPatch();
+        const patchList = dmp.patch_make(originalText, newText);
+        const [patchedText, results] = dmp.patch_apply(patchList, originalText);
+
+        if (results.some((applied: boolean) => !applied)) {
+            return {
+                success: false,
+                error: "Failed to apply patch. The code may have changed too much."
+            };
+        }
+
+        return { success: true, patchedText };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "An unexpected error occurred while applying changes."
+        };
+    }
+}
 
 /**
  * Handles incoming messages from the webview.
@@ -93,111 +246,30 @@ async function handleHighlightCodeMapping(message: any) {
         return;
     }
 
-    // Use diff-match-patch to find the selectedCode region in the document
-    let DiffMatchPatch: any;
-    try {
-        DiffMatchPatch = require('diff-match-patch');
-    } catch (e) {
-        console.error("diff-match-patch not installed in extension backend.");
-        return;
-    }
-    const dmp = new DiffMatchPatch();
     const docText = editor.document.getText();
-    const BITAP_LIMIT = 32;
 
-    // 1. Find the selectedCode region in the file (same as applyFuzzyPatchAndReplaceInFile)
-    let regionStart = docText.indexOf(selectedCode);
-    if (regionStart === -1) {
-        regionStart = docText.toLowerCase().indexOf(selectedCode.toLowerCase());
-    }
-    if (regionStart === -1 && selectedCode.length <= BITAP_LIMIT) {
-        try {
-            regionStart = dmp.match_main(docText, selectedCode, 0);
-            if (regionStart === -1) {
-                regionStart = dmp.match_main(docText.toLowerCase(), selectedCode.toLowerCase(), 0);
-            }
-        } catch (e) { }
-    }
-    if (regionStart === -1 && selectedCode.length > BITAP_LIMIT) {
-        let bestScore = 0;
-        let bestLoc = -1;
-        for (let i = 0; i <= docText.length - BITAP_LIMIT; i++) {
-            const window = docText.substr(i, BITAP_LIMIT);
-            let score = 0;
-            try {
-                const diffs = dmp.diff_main(window, selectedCode.substr(0, BITAP_LIMIT));
-                dmp.diff_cleanupSemantic(diffs);
-                let editDistance = 0;
-                diffs.forEach((d: [number, string]) => {
-                    if (d[0] !== 0) { editDistance += d[1].length; }
-                });
-                score = (BITAP_LIMIT - editDistance) / BITAP_LIMIT;
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestLoc = i;
-                }
-            } catch (e) {
-                score = 0;
-            }
-        }
-        if (bestScore > 0.9) {
-            regionStart = bestLoc;
-        }
-    }
-
-    if (regionStart === -1) {
+    // 1. Find the selectedCode region in the file
+    const regionMatch = findBestMatch(docText, selectedCode);
+    if (regionMatch.location === -1) {
         console.warn("[highlightCodeMapping] Could not find selectedCode region in file.");
         return;
     }
+
+    const regionStart = regionMatch.location;
     const regionEnd = regionStart + selectedCode.length;
     const regionText = docText.slice(regionStart, regionEnd);
 
-    // 2. For each codeSnippet, search within regionText using the same logic as CodeBlockWithMapping
+    // 2. For each codeSnippet, search within regionText
     const allRanges: vscode.Range[] = [];
     for (const snippet of codeSnippets) {
         if (!snippet || !snippet.trim()) { continue; }
         const pattern = snippet.replace(/\r\n/g, "\n");
-        let loc = regionText.indexOf(pattern);
-        if (loc === -1) {
-            loc = regionText.toLowerCase().indexOf(pattern.toLowerCase());
-        }
-        if (loc === -1 && pattern.length <= BITAP_LIMIT) {
-            try {
-                loc = dmp.match_main(regionText, pattern, 0);
-                if (loc === -1) {
-                    loc = dmp.match_main(regionText.toLowerCase(), pattern.toLowerCase(), 0);
-                }
-            } catch (e) { }
-        }
-        if (loc === -1 && pattern.length > BITAP_LIMIT) {
-            let bestScore = 0;
-            let bestLoc = -1;
-            for (let i = 0; i <= regionText.length - BITAP_LIMIT; i++) {
-                const window = regionText.substr(i, BITAP_LIMIT);
-                let score = 0;
-                try {
-                    const diffs = dmp.diff_main(window, pattern.substr(0, BITAP_LIMIT));
-                    dmp.diff_cleanupSemantic(diffs);
-                    let editDistance = 0;
-                    diffs.forEach((d: [number, string]) => {
-                        if (d[0] !== 0) { editDistance += d[1].length; }
-                    });
-                    score = (BITAP_LIMIT - editDistance) / BITAP_LIMIT;
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestLoc = i;
-                    }
-                } catch (e) {
-                    score = 0;
-                }
-            }
-            if (bestScore > 0.9) {
-                loc = bestLoc;
-            }
-        }
-        if (loc !== -1) {
+
+        // Find the best match within the region
+        const match = findBestMatch(regionText, pattern);
+        if (match.location !== -1) {
             // Map regionText offset to docText offset
-            const absStart = regionStart + loc;
+            const absStart = regionStart + match.location;
             const absEnd = absStart + pattern.length;
             const start = editor.document.positionAt(absStart);
             const end = editor.document.positionAt(absEnd);
@@ -220,7 +292,6 @@ async function handleHighlightCodeMapping(message: any) {
         editor.setDecorations(decorationType, allRanges);
         // Store for later removal
         currentHighlightDecoration = decorationType;
-        currentHighlightRange = null; // Multiple ranges, so not a single range
         currentHighlightEditor = editor;
     } else {
         console.warn("[highlightCodeMapping] No code regions found to highlight.");
@@ -237,7 +308,6 @@ async function handleClearHighlight() {
         currentHighlightDecoration.dispose();
     }
     currentHighlightDecoration = null;
-    currentHighlightRange = null;
     currentHighlightEditor = null;
 }
 
@@ -331,7 +401,6 @@ async function handlePromptToSummary(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
-    console.log('Apply to summary (promptToSummary) received:', message);
     // Call the LLM to update the summary based on the direct prompt
     const updatedSummary = await getSummaryFromInstruction(
         "", // No code context needed for summary update
@@ -339,7 +408,12 @@ async function handlePromptToSummary(
         message.summaryLevel,
         message.promptText
     );
-    console.log('Updated summary (promptToSummary):', updatedSummary);
+    console.log('promptToSummary:', {
+        summaryText: message.summaryText,
+        summaryLevel: message.summaryLevel,
+        promptText: message.promptText,
+        updatedSummary
+    });
 
     // Return the updated summary to the frontend
     webviewContainer.webview.postMessage({
@@ -357,8 +431,6 @@ async function handleSummaryPrompt(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
-    console.log('Summary-mediated prompt received:', message);
-
     const { originalCode, filename, fullPath } = message;
     if (!originalCode || !(filename || fullPath)) {
         webviewContainer.webview.postMessage({
@@ -371,6 +443,14 @@ async function handleSummaryPrompt(
     }
 
     const newCode = await getCodeFromSummaryEdit(originalCode, message.summaryText, message.summaryLevel);
+
+    console.log('summaryPrompt:', {
+        originalCode,
+        filename,
+        fullPath,
+        newCode
+    });
+
     await applyCodeChanges(webviewContainer, message, originalCode, newCode, filename, fullPath, 'summaryPrompt');
 }
 
@@ -381,8 +461,6 @@ async function handleDirectPrompt(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
-    console.log('Direct prompt received:', message);
-
     const { originalCode, filename, fullPath } = message;
     if (!originalCode || !(filename || fullPath)) {
         webviewContainer.webview.postMessage({
@@ -393,6 +471,13 @@ async function handleDirectPrompt(
         });
         return;
     }
+
+    console.log('directPrompt:', {
+        originalCode,
+        filename,
+        fullPath,
+        promptText: message.promptText
+    });
 
     const newCode = await getCodeFromDirectInstruction(originalCode, message.promptText);
     await applyCodeChanges(webviewContainer, message, originalCode, newCode, filename, fullPath, 'directPrompt');
@@ -412,32 +497,30 @@ async function applyFuzzyPatchAndReplaceInFile(
 ): Promise<{ success: boolean; patchedText?: string; error?: string }> {
     try {
         const fileText = document.getText();
-        const DiffMatchPatch = require('diff-match-patch');
-        const dmp = new DiffMatchPatch();
-        const loc = dmp.match_main(fileText, originalCode, offset);
 
-        if (loc === -1) {
+        // Find the location of the original code in the file
+        const match = findBestMatch(fileText, originalCode, offset);
+        if (match.location === -1) {
             return { success: false, error: "Could not find the original code in the file. The code may have changed too much." };
         }
 
-        const patchList = dmp.patch_make(originalCode, newCode);
-        const [patchedText, results] = dmp.patch_apply(patchList, originalCode);
-
-        if (results.some((applied: boolean) => !applied)) {
-            return { success: false, error: "Failed to apply patch. The code may have changed too much since the summary was generated." };
+        // Apply the patch
+        const patchResult = applyPatch(originalCode, newCode);
+        if (!patchResult.success) {
+            return patchResult;
         }
 
         const edit = new vscode.WorkspaceEdit();
-        const start = document.positionAt(loc);
-        const end = document.positionAt(loc + originalCode.length);
-        edit.replace(fileUri, new vscode.Range(start, end), patchedText);
+        const start = document.positionAt(match.location);
+        const end = document.positionAt(match.location + originalCode.length);
+        edit.replace(fileUri, new vscode.Range(start, end), patchResult.patchedText!);
 
         const success = await vscode.workspace.applyEdit(edit);
         if (!success) {
             return { success: false, error: "Failed to apply edit to the file." };
         }
 
-        return { success: true, patchedText };
+        return { success: true, patchedText: patchResult.patchedText };
     } catch (error) {
         console.error('Error applying patch:', error);
         return {
