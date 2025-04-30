@@ -1,6 +1,19 @@
+import * as vscode from 'vscode';
+
 /**
  * LLM API utility functions for code summarization and editing.
  */
+
+// Module level variable to store extension context
+let extensionContext: vscode.ExtensionContext | undefined;
+
+/**
+ * Initialize the extension context
+ * @param context Extension context
+ */
+export function initialize(context: vscode.ExtensionContext) {
+    extensionContext = context;
+}
 
 // Remove all code block markers (e.g., ``` or ```python) from LLM output.
 // This class ensures only the code or summary content remains.
@@ -12,13 +25,81 @@ function cleanLLMCodeBlock(content: string): string {
 }
 
 /**
+ * Update the OpenAI API Key
+ * This will prompt the user to enter a new key and store it in global state
+ * @returns Promise resolving to true if key was updated, false if cancelled
+ */
+export async function updateApiKey(): Promise<boolean> {
+    if (!extensionContext) {
+        throw new Error('Extension context not initialized. Call initialize() first.');
+    }
+
+    const apiKey = await vscode.window.showInputBox({
+        prompt: 'Enter your OpenAI API Key. The key will be stored locally only.',
+        placeHolder: 'sk-...',
+        password: true,
+        ignoreFocusOut: true,
+        title: 'Update OpenAI API Key',
+        validateInput: (value: string) => {
+            if (!value.startsWith('sk-')) {
+                return 'API Key must start with "sk-"';
+            }
+            return null;
+        }
+    });
+
+    if (!apiKey) {
+        return false;
+    }
+
+    await extensionContext.globalState.update('openaiApiKey', apiKey);
+    vscode.window.showInformationMessage('OpenAI API Key updated successfully!');
+    return true;
+}
+
+/**
+ * Get OpenAI API Key with fallback mechanisms
+ * 1. Try environment variable
+ * 2. Try global state
+ * 3. Prompt user to enter key if not found
+ * @returns Promise resolving to API Key
+ */
+async function getApiKey(): Promise<string> {
+    if (!extensionContext) {
+        throw new Error('Extension context not initialized. Call initialize() first.');
+    }
+
+    // First try environment variable
+    // const envApiKey = process.env.OPENAI_API_KEY;
+    // if (envApiKey) {
+    //     console.log('Using environment variable for OpenAI API Key');
+    //     return envApiKey;
+    // }
+
+    // Try global state first, if not found, keep prompting until user enters a valid key
+    while (true) {
+        const key = extensionContext.globalState.get<string>('openaiApiKey');
+        if (key) {
+            return key;
+        }
+        if (!await updateApiKey()) {
+            throw new Error('OpenAI API key is required to use this extension.');
+        }
+    }
+}
+
+/**
  * Common function to call LLM API
  * @param prompt The prompt to send to LLM
  * @param parseJson Whether to parse the response as JSON
  * @returns The LLM response
  */
 async function callLLM(prompt: string, parseJson: boolean = false): Promise<any> {
-    const apiKey = process.env.OPENAI_API_KEY || '';
+    const apiKey = await getApiKey();
+    if (!apiKey) {
+        throw new Error('OpenAI API key not found. Please set it in environment variables or enter it when prompted.');
+    }
+
     const endpoint = 'https://api.openai.com/v1/chat/completions';
 
     const response = await fetch(endpoint, {
