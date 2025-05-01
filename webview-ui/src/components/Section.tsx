@@ -10,6 +10,7 @@ interface SectionProps {
     onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
     collapsed: boolean;
     onToggle: () => void;
+    onDeleteSection: () => void;
 }
 
 /**
@@ -21,7 +22,8 @@ const Section: React.FC<SectionProps> = ({
     onLevelChange,
     onEditPrompt,
     collapsed,
-    onToggle
+    onToggle,
+    onDeleteSection
 }) => {
     return (
         <div style={{
@@ -34,6 +36,7 @@ const Section: React.FC<SectionProps> = ({
                 section={section}
                 collapsed={collapsed}
                 onToggle={onToggle}
+                onDeleteSection={onDeleteSection}
             />
             {!collapsed && (
                 <SectionBody

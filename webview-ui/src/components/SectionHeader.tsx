@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { getFileIcon } from "../utils/fileIcons.js";
 import { FONT_SIZE, COLORS, SPACING, COMMON_STYLES } from "../styles/constants.js";
 import { SectionData } from "../types/sectionTypes.js";
@@ -7,6 +7,7 @@ interface SectionHeaderProps {
     section: SectionData;
     collapsed: boolean;
     onToggle: () => void;
+    onDeleteSection: () => void;
 }
 
 interface HeaderContentProps {
@@ -14,13 +15,17 @@ interface HeaderContentProps {
     showChevron: boolean;
     chevronDirection: 'right' | 'down';
     collapsed: boolean;
+    onDeleteSection: () => void;
+    headerHovered: boolean;
 }
 
 const HeaderContent: React.FC<HeaderContentProps> = ({
     section,
     showChevron,
     chevronDirection,
-    collapsed
+    collapsed,
+    onDeleteSection,
+    headerHovered
 }) => {
     const { metadata, title, concise, createdAt, lines } = section;
     const { filename } = metadata;
@@ -107,14 +112,41 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     </span>
                 </span>
             </div>
-            {/* Row 2: Title */}
-            <div style={{
-                fontWeight: 600,
-                fontSize: FONT_SIZE.HEADER,
-                marginBottom: collapsed && concise ? SPACING.SMALL : 0,
-                color: COLORS.FOREGROUND
-            }}>
-                {title || "Untitled"}
+            {/* Row 2: Title and Delete Button (inline, flex row) */}
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    fontWeight: 600,
+                    fontSize: FONT_SIZE.HEADER,
+                    marginBottom: collapsed && concise ? SPACING.SMALL : 0,
+                    color: COLORS.FOREGROUND
+                }}
+            >
+                <span>{title || "Untitled"}</span>
+                {/* Only show delete button when header is hovered and section is expanded */}
+                {!collapsed && headerHovered && (
+                    <button
+                        type="button"
+                        onClick={e => {
+                            e.stopPropagation(); // Prevent triggering collapse/expand
+                            onDeleteSection();
+                        }}
+                        title="Delete Section"
+                        aria-label="Delete Section"
+                        style={{
+                            ...COMMON_STYLES.ICON_BUTTON,
+                        }}
+                    >
+                        <span
+                            className="codicon codicon-trash"
+                            style={{
+                                fontSize: FONT_SIZE.ICON,
+                            }}
+                        />
+                    </button>
+                )}
             </div>
             {/* Row 3: Concise summary when collapsed */}
             {collapsed && concise && (
@@ -138,19 +170,27 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
 const SectionHeader: React.FC<SectionHeaderProps> = ({
     section,
     collapsed,
-    onToggle
+    onToggle,
+    onDeleteSection
 }) => {
+    // Track mouse hover state for header
+    const [hovered, setHovered] = useState(false);
+
     return (
         <div
             style={COMMON_STYLES.HEADER}
             onClick={onToggle}
             title={collapsed ? "Expand section" : "Collapse section"}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
         >
             <HeaderContent
                 section={section}
                 showChevron={true}
                 chevronDirection={collapsed ? 'right' : 'down'}
                 collapsed={collapsed}
+                onDeleteSection={onDeleteSection}
+                headerHovered={hovered}
             />
         </div>
     );

@@ -56,6 +56,12 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
         });
     };
 
+    // Handler for deleting a section by id
+    // Removes the section from the list and updates the parent
+    const handleDeleteSection = (id: string) => {
+        onSectionsChange(sections.filter(s => s.metadata.id !== id));
+    };
+
     return (
         <div>
             {[...sections].reverse().map((section: SectionData) => (
@@ -66,6 +72,7 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
                     onEditPrompt={(level, value) => handleEditPrompt(section.metadata.id, level, value)}
                     collapsed={section.metadata.id !== openedSectionId}
                     onToggle={() => handleToggleSection(section.metadata.id)}
+                    onDeleteSection={() => handleDeleteSection(section.metadata.id)}
                 />
             ))}
         </div>
