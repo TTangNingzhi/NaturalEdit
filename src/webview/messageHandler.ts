@@ -210,6 +210,9 @@ export async function handleMessage(
         case 'clearHighlight':
             await handleClearHighlight();
             break;
+        case 'checkSectionValidity':
+            await handleCheckSectionValidity(message, webviewContainer);
+            break;
     }
 }
 
@@ -590,17 +593,6 @@ async function applyCodeChanges(
     action: 'directPrompt' | 'summaryPrompt'
 ) {
     try {
-        const editor = await getLastActiveEditor();
-        if (!editor) {
-            webviewContainer.webview.postMessage({
-                command: 'editResult',
-                sectionId: message.sectionId,
-                action,
-                error: "No active editor found."
-            });
-            return;
-        }
-
         const fileInfo = await openFile(filename, fullPath);
         if (!fileInfo) {
             webviewContainer.webview.postMessage({
@@ -670,22 +662,61 @@ async function applyCodeChanges(
 }
 
 /**
- * Gets file information from the editor
+ * Handles the checkSectionValidity command.
+ * Checks if the file exists and if the original code can be matched.
+ * If matched, opens the file and navigates to the match.
+ * @param message The message containing fullPath and originalCode
+ * @param webviewContainer The webview panel or view instance
  */
-function getFileInfo(editor: vscode.TextEditor | undefined) {
-    let filename = "unknown";
-    let fullPath = "";
-    let lines = "";
-
-    if (editor) {
-        fullPath = editor.document.fileName;
-        filename = path.basename(fullPath);
-        const startLine = editor.selection.start.line;
-        const endLine = editor.selection.end.line;
-        lines = startLine === endLine
-            ? `${startLine + 1}`
-            : `${startLine + 1}-${endLine + 1}`;
+async function handleCheckSectionValidity(
+    message: any,
+    webviewContainer: vscode.WebviewPanel | vscode.WebviewView
+) {
+    const { fullPath, originalCode } = message;
+    if (!fullPath || !originalCode) {
+        webviewContainer.webview.postMessage({
+            command: 'sectionValidityResult',
+            status: 'file_missing'
+        });
+        return;
     }
 
-    return { filename, fullPath, lines };
+    // Try to open the file
+    const fileInfo = await openFile("", fullPath);
+    if (!fileInfo) {
+        webviewContainer.webview.postMessage({
+            command: 'sectionValidityResult',
+            status: 'file_missing'
+        });
+        return;
+    }
+
+    const { document } = fileInfo;
+    const fileText = document.getText();
+
+    // Try to find the best match for the original code
+    const match = findBestMatch(fileText, originalCode, 0);
+    if (match.location === -1) {
+        webviewContainer.webview.postMessage({
+            command: 'sectionValidityResult',
+            status: 'code_not_matched'
+        });
+        return;
+    }
+
+    // If matched, open the file and navigate to the match location
+    try {
+        const editor = await vscode.window.showTextDocument(document, { preview: false });
+        const start = document.positionAt(match.location);
+        const end = document.positionAt(match.location + originalCode.length);
+        editor.selection = new vscode.Selection(start, end);
+        editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+    } catch (e) {
+        // Ignore navigation errors, still report success
+    }
+
+    webviewContainer.webview.postMessage({
+        command: 'sectionValidityResult',
+        status: 'success'
+    });
 }

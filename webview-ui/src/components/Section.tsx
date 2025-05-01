@@ -43,6 +43,7 @@ const Section: React.FC<SectionProps> = ({
                     section={section}
                     onLevelChange={onLevelChange}
                     onEditPrompt={onEditPrompt}
+                    onDeleteSection={onDeleteSection}
                 />
             )}
         </div>
