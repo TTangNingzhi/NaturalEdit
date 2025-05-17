@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import fetch from 'node-fetch';
 
 /**
  * LLM API utility functions for code summarization and editing.
