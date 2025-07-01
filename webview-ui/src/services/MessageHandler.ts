@@ -13,74 +13,83 @@ import { v4 as uuidv4 } from "uuid";
  * @param onProgress Callback for progress updates (optional)
  */
 export const setupMessageHandler = (
-    onError: (error: string) => void,
-    onNewSection: (section: SectionData) => void,
-    onEditResult?: (sectionId: string, action: string, newCode: string) => void,
-    onProgress?: (stageText: string) => void
+  onError: (error: string) => void,
+  onNewSection: (section: SectionData) => void,
+  onEditResult?: (sectionId: string, action: string, newCode: string) => void,
+  onProgress?: (stageText: string) => void
 ) => {
-    interface ProgressMessage {
-        command: "summaryProgress";
-        stageText: string;
-    }
+  interface ProgressMessage {
+    command: "summaryProgress";
+    stageText: string;
+  }
 
-    const handleMessage = (message: unknown) => {
-        if (
-            typeof message === "object" &&
-            message !== null
-        ) {
-            // Handle summary progress updates
-            if ("command" in message && message.command === "summaryProgress" && onProgress) {
-                // Call the progress callback with the current stage text
-                onProgress((message as ProgressMessage).stageText || "Summarizing...");
-            } else if ("command" in message && message.command === "summaryResult") {
-                const msg = message as SummaryResultMessage;
-                if (msg.error) {
-                    onError(msg.error);
-                } else if (msg.data) {
-                    const id = uuidv4();
-                    onNewSection({
-                        metadata: {
-                            id,
-                            filename: msg.filename || "unknown",
-                            fullPath: msg.fullPath || "",
-                            offset: typeof msg.offset === "number" ? msg.offset : 0,
-                            originalCode: msg.originalCode || ""
-                        },
-                        lines: [parseInt(msg.lines?.split('-')[0] || '0'), parseInt(msg.lines?.split('-')[1] || '0')],
-                        title: msg.title || "Untitled",
-                        concise: msg.concise || "",
-                        createdAt: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
-                        summaryData: msg.data,
-                        selectedLevel: "concise",
-                        editPromptLevel: null,
-                        editPromptValue: "",
-                        summaryMappings: msg.summaryMappings || { concise: [], detailed: [], bullets: [] }
-                    });
-                }
-            } else if ("command" in message && message.command === "editResult" && onEditResult) {
-                // Handle backend edit result (e.g., promptToSummary)
-                if (
-                    "action" in message &&
-                    message.action === "promptToSummary" &&
-                    "sectionId" in message &&
-                    typeof message.sectionId === "string" &&
-                    "newCode" in message &&
-                    typeof message.newCode === "string"
-                ) {
-                    onEditResult(message.sectionId, message.action, message.newCode);
-                }
-            }
+  const handleMessage = (message: unknown) => {
+    if (typeof message === "object" && message !== null) {
+      // Handle summary progress updates
+      if (
+        "command" in message &&
+        message.command === "summaryProgress" &&
+        onProgress
+      ) {
+        // Call the progress callback with the current stage text
+        onProgress((message as ProgressMessage).stageText || "Summarizing...");
+      } else if ("command" in message && message.command === "summaryResult") {
+        const msg = message as SummaryResultMessage;
+        if (msg.error) {
+          onError(msg.error);
+        } else if (msg.data) {
+          const id = uuidv4();
+          onNewSection({
+            metadata: {
+              id,
+              filename: msg.filename || "unknown",
+              fullPath: msg.fullPath || "",
+              offset: typeof msg.offset === "number" ? msg.offset : 0,
+              originalCode: msg.originalCode || "",
+            },
+            lines: [
+              parseInt(msg.lines?.split("-")[0] || "0"),
+              parseInt(msg.lines?.split("-")[1] || "0"),
+            ],
+            title: msg.title || "Untitled",
+            createdAt: Date.now(),
+            summaryData: {
+              title: msg.title || "Untitled",
+              detailed: msg.data?.detailed || "",
+            },
+            selectedLevel: "detailed",
+            editPromptValue: "",
+            summaryMappings: msg.summaryMappings || { detailed: [] },
+          });
         }
-    };
+      } else if (
+        "command" in message &&
+        message.command === "editResult" &&
+        onEditResult
+      ) {
+        // Handle backend edit result (e.g., promptToSummary)
+        if (
+          "action" in message &&
+          message.action === "promptToSummary" &&
+          "sectionId" in message &&
+          typeof message.sectionId === "string" &&
+          "newCode" in message &&
+          typeof message.newCode === "string"
+        ) {
+          onEditResult(message.sectionId, message.action, message.newCode);
+        }
+      }
+    }
+  };
 
-    vscodeApi.onMessage(handleMessage);
+  vscodeApi.onMessage(handleMessage);
 };
 
 /**
  * Request summary from VSCode
  */
 export const requestSummary = () => {
-    vscodeApi.postMessage({ command: "getSummary" });
+  vscodeApi.postMessage({ command: "getSummary" });
 };
 
 /**
@@ -93,22 +102,22 @@ export const requestSummary = () => {
  * @param offset The offset in the file
  */
 export const sendDirectPrompt = (
-    sectionId: string,
-    prompt: string,
-    originalCode: string,
-    filename: string,
-    fullPath: string,
-    offset: number
+  sectionId: string,
+  prompt: string,
+  originalCode: string,
+  filename: string,
+  fullPath: string,
+  offset: number
 ) => {
-    vscodeApi.postMessage({
-        command: "directPrompt",
-        promptText: prompt,
-        sectionId,
-        originalCode,
-        filename,
-        fullPath,
-        offset
-    });
+  vscodeApi.postMessage({
+    command: "directPrompt",
+    promptText: prompt,
+    sectionId,
+    originalCode,
+    filename,
+    fullPath,
+    offset,
+  });
 };
 
 /**
@@ -123,26 +132,26 @@ export const sendDirectPrompt = (
  * @param originalSummary The original summary for diff comparison
  */
 export const sendEditSummary = (
-    sectionId: string,
-    level: string,
-    value: string,
-    originalCode: string,
-    filename: string,
-    fullPath: string,
-    offset: number,
-    originalSummary: string
+  sectionId: string,
+  level: string,
+  value: string,
+  originalCode: string,
+  filename: string,
+  fullPath: string,
+  offset: number,
+  originalSummary: string
 ) => {
-    vscodeApi.postMessage({
-        command: "summaryPrompt",
-        summaryText: value,
-        summaryLevel: level,
-        sectionId,
-        originalCode,
-        filename,
-        fullPath,
-        offset,
-        originalSummary
-    });
+  vscodeApi.postMessage({
+    command: "summaryPrompt",
+    summaryText: value,
+    summaryLevel: level,
+    sectionId,
+    originalCode,
+    filename,
+    fullPath,
+    offset,
+    originalSummary,
+  });
 };
 
 /**
@@ -157,26 +166,26 @@ export const sendEditSummary = (
  * @param offset The offset in the file
  */
 export const sendPromptToSummary = (
-    sectionId: string,
-    level: string,
-    summary: string,
-    prompt: string,
-    originalCode: string,
-    filename: string,
-    fullPath: string,
-    offset: number
+  sectionId: string,
+  level: string,
+  summary: string,
+  prompt: string,
+  originalCode: string,
+  filename: string,
+  fullPath: string,
+  offset: number
 ) => {
-    vscodeApi.postMessage({
-        command: "promptToSummary",
-        summaryText: summary,
-        summaryLevel: level,
-        promptText: prompt,
-        sectionId,
-        originalCode,
-        filename,
-        fullPath,
-        offset
-    });
+  vscodeApi.postMessage({
+    command: "promptToSummary",
+    summaryText: summary,
+    summaryLevel: level,
+    promptText: prompt,
+    sectionId,
+    originalCode,
+    filename,
+    fullPath,
+    offset,
+  });
 };
 
 /**
@@ -195,32 +204,31 @@ export const sendPromptToSummary = (
  * @returns A function to setup the message handler
  */
 export const createStatefulMessageHandler = (
-    setLoading: (loading: boolean) => void,
-    setError: (error: string | null) => void,
-    setSectionList: React.Dispatch<React.SetStateAction<SectionData[]>>,
-    setLoadingText?: (text: string) => void
-): () => void => {
-    return () => setupMessageHandler(
-        (error) => {
-            setLoading(false);
-            setError(error);
-        },
-        (section) => {
-            setLoading(false);
-            setSectionList(prev => [...prev, section]);
-        },
-        (sectionId, action, newCode) => {
-            if (action === "promptToSummary") {
-                setSectionList(prev =>
-                    prev.map(s =>
-                        s.metadata.id === sectionId
-                            ? { ...s, editPromptValue: newCode }
-                            : s
-                    )
-                );
-            }
-        },
-        // Progress callback: update loading text if provided
-        setLoadingText
+  setLoading: (loading: boolean) => void,
+  setError: (error: string | null) => void,
+  setSection: React.Dispatch<React.SetStateAction<SectionData | null>>,
+  setLoadingText?: (text: string) => void
+): (() => void) => {
+  return () =>
+    setupMessageHandler(
+      (error) => {
+        setLoading(false);
+        setError(error);
+      },
+      (section) => {
+        setLoading(false);
+        setSection(section);
+      },
+      (sectionId, action, newCode) => {
+        if (action === "promptToSummary") {
+          setSection((prev) =>
+            prev && prev.metadata.id === sectionId
+              ? { ...prev, editPromptValue: newCode }
+              : prev
+          );
+        }
+      },
+      // Progress callback: update loading text if provided
+      setLoadingText
     );
 };

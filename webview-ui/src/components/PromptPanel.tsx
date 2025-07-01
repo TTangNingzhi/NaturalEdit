@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { VSCodeTextArea } from "@vscode/webview-ui-toolkit/react/index.js";
 import { SummaryDiffEditor } from "./SummaryDiffEditor";
-import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData } from "../types/sectionTypes.js";
 import {
   FONT_SIZE,
   SPACING,
@@ -27,7 +27,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
     prompt1: null,
     prompt2: null,
   });
-  const { metadata, editPromptLevel, editPromptValue } = section;
+  const { metadata, editPromptValue } = section;
   const { onDirectPrompt, onSummaryPrompt } = usePrompt(metadata);
 
   // Direct Prompt state
@@ -36,8 +36,6 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
   // For summary diff editor
   const [currentSummary, setCurrentSummary] = useState<string>("");
   const [originalSummary, setOriginalSummary] = useState<string>("");
-  const [localEditPromptLevel, setLocalEditPromptLevel] =
-    useState<SummaryLevel | null>(null);
   const editPromptValueRef = useRef(editPromptValue);
 
   // Keep currentSummary in sync with editPromptValue
@@ -46,13 +44,12 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
     editPromptValueRef.current = editPromptValue;
   }, [editPromptValue]);
 
-  // Set originalSummary only when entering edit mode (editPromptLevel changes from null to a value)
+  // Set originalSummary only when entering edit mode (if editPromptValue changes)
   useEffect(() => {
-    if (editPromptLevel) {
+    if (editPromptValue) {
       setOriginalSummary(editPromptValueRef.current);
-      setLocalEditPromptLevel(editPromptLevel);
     }
-  }, [editPromptLevel]);
+  }, [editPromptValue]);
 
   // Type guard to check if an error has a string message property
   function isErrorWithMessage(err: unknown): err is { message: string } {
@@ -109,12 +106,12 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
   // Commit summary to backend
   const handleSummaryCommit = async () => {
     const action = "prompt2";
-    if (localEditPromptLevel && currentSummary.trim()) {
+    if (currentSummary.trim()) {
       setLoading((prev) => ({ ...prev, [action]: true }));
       setError((prev) => ({ ...prev, [action]: null }));
       try {
         await onSummaryPrompt(
-          localEditPromptLevel,
+          "detailed", //hardcoded to detailed level
           currentSummary.trim(),
           originalSummary
         );
@@ -230,13 +227,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
       <div>
         <div style={COMMON_STYLES.SECTION_HEADER}>
           <span style={COMMON_STYLES.SECTION_LABEL}>
-            Summary-Mediated Prompt
-            {localEditPromptLevel
-              ? ` (${
-                  localEditPromptLevel.charAt(0).toUpperCase() +
-                  localEditPromptLevel.slice(1)
-                })`
-              : ""}
+            Summary-Mediated Prompt (Detailed)
           </span>
           {loading.prompt2 ? (
             <ClipLoader color={COLORS.FOREGROUND} size={FONT_SIZE.SMALL} />
@@ -247,14 +238,12 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
                 opacity:
                   !currentSummary.trim() ||
                   currentSummary.trim() === originalSummary ||
-                  !localEditPromptLevel ||
                   loading.prompt2
                     ? 0.5
                     : 1,
                 cursor:
                   !currentSummary.trim() ||
                   currentSummary.trim() === originalSummary ||
-                  !localEditPromptLevel ||
                   loading.prompt2
                     ? "not-allowed"
                     : "pointer",
@@ -264,7 +253,6 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
               disabled={
                 !currentSummary.trim() ||
                 currentSummary.trim() === originalSummary ||
-                !localEditPromptLevel ||
                 loading.prompt2
               }
               aria-label="Send Summary Prompt"

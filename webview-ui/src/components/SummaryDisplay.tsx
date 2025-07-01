@@ -1,15 +1,11 @@
 import React from "react";
-import {
-  VSCodeRadioGroup,
-  VSCodeRadio,
-} from "@vscode/webview-ui-toolkit/react/index.js";
-import { SummaryData, SummaryLevel } from "../types/sectionTypes.js";
+import { SummaryData } from "../types/sectionTypes.js";
 import {
   FONT_SIZE,
   COLORS,
   SPACING,
-  BORDER_RADIUS,
   COMMON_STYLES,
+  BORDER_RADIUS,
 } from "../styles/constants.js";
 
 /**
@@ -17,35 +13,21 @@ import {
  */
 interface SummaryDisplayProps {
   summary: SummaryData;
-  selectedLevel: SummaryLevel;
-  onLevelChange: (level: SummaryLevel) => void;
-  onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
+  onEditPrompt: (level: string, value: string | string[]) => void;
 }
 
 /**
  * SummaryDisplay component
- * - Shows the summary title (not editable)
- * - Shows a segmented toggle for Concise, Detailed, Bulleted
- * - Shows the selected summary with an "Edit In Prompt" button (except for Title)
+ * - Shows the detailed summary with an "Edit In Prompt" button
  * - Uses VSCode Webview UI Toolkit React components
  */
 const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
   summary,
-  selectedLevel,
-  onLevelChange,
   onEditPrompt,
 }) => {
-  // Get the value for the selected summary level
-  const getSummaryValue = (level: SummaryLevel) => {
-    if (level === "concise") return summary.concise;
-    if (level === "detailed") return summary.detailed;
-    if (level === "bullets") return summary.bullets.join("\n");
-    return "";
-  };
-
   // Handle "Edit In Prompt" button click
   const handleEdit = () => {
-    onEditPrompt(selectedLevel, getSummaryValue(selectedLevel));
+    onEditPrompt("detailed", summary.detailed);
   };
 
   /**
@@ -60,25 +42,11 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
 
   return (
     <div style={COMMON_STYLES.SECTION_COMPACT}>
-      {/* Option row: options left, edit button right */}
+      {/* Header with edit button */}
       <div style={COMMON_STYLES.SECTION_HEADER}>
-        <VSCodeRadioGroup
-          orientation="horizontal"
-          value={selectedLevel}
-          onChange={(e: unknown) => {
-            const value = ((e as Event).target as HTMLInputElement)
-              .value as SummaryLevel;
-            onLevelChange(value);
-          }}
-          style={{
-            marginBottom: SPACING.MINUS_TINY,
-            marginTop: SPACING.MINUS_TINY,
-          }}
-        >
-          <VSCodeRadio value="concise">Concise</VSCodeRadio>
-          <VSCodeRadio value="detailed">Detailed</VSCodeRadio>
-          <VSCodeRadio value="bullets">Bulleted</VSCodeRadio>
-        </VSCodeRadioGroup>
+        <h3 style={{ margin: 0, fontSize: FONT_SIZE.HEADER }}>
+          Detailed Summary
+        </h3>
         <button
           style={COMMON_STYLES.ICON_BUTTON}
           aria-label="Edit In Prompt"
@@ -92,7 +60,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
         </button>
       </div>
 
-      {/* Selected summary card with placeholder */}
+      {/* Detailed summary card with placeholder */}
       <div
         style={{
           marginBottom: SPACING.SMALL,
@@ -115,18 +83,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
               border: "none",
             }}
           >
-            {selectedLevel === "concise" &&
-              renderSummary(summary.concise || "")}
-            {selectedLevel === "detailed" &&
-              renderSummary(summary.detailed || "")}
-            {selectedLevel === "bullets" &&
-              (summary.bullets.length > 0 ? (
-                renderSummary(summary.bullets.join("\n"))
-              ) : (
-                <span style={{ color: COLORS.DESCRIPTION }}>
-                  Bulleted summary...
-                </span>
-              ))}
+            {renderSummary(summary.detailed || "")}
           </pre>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import SummaryDisplay from "./SummaryDisplay.js";
 import PromptPanel from "./PromptPanel.js";
-import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData } from "../types/sectionTypes.js";
 import {
   COLORS,
   SPACING,
@@ -12,8 +12,7 @@ import { vscodeApi } from "../utils/vscodeApi"; // Import VSCode API for backend
 
 interface SectionBodyProps {
   section: SectionData;
-  onLevelChange: (level: SummaryLevel) => void;
-  onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
+  onEditPrompt: (level: string, value: string | string[]) => void;
   onDeleteSection: () => void; // Handler for deleting the section
 }
 
@@ -27,11 +26,10 @@ interface SectionBodyProps {
  */
 const SectionBody: React.FC<SectionBodyProps> = ({
   section,
-  onLevelChange,
   onEditPrompt,
   onDeleteSection,
 }) => {
-  const { summaryData, selectedLevel } = section;
+  const { summaryData } = section;
 
   // State for section validity: "pending" | "success" | "file_missing" | "code_not_matched"
   const [validityStatus, setValidityStatus] = useState<
@@ -84,12 +82,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
       }}
     >
       {/* Main content */}
-      <SummaryDisplay
-        summary={summaryData}
-        selectedLevel={selectedLevel}
-        onLevelChange={onLevelChange}
-        onEditPrompt={onEditPrompt}
-      />
+      <SummaryDisplay summary={summaryData} onEditPrompt={onEditPrompt} />
       <PromptPanel section={section} />
 
       {/* Overlay for invalid section */}

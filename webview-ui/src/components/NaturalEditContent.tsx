@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react/index.js";
 import { FONT_SIZE, COLORS, SPACING } from "../styles/constants.js";
 import { ClipLoader } from "react-spinners";
-import SectionList from "./SectionList.js";
+import Section from "./Section.js";
 import { SectionData } from "../types/sectionTypes.js";
 import {
   createStatefulMessageHandler,
@@ -10,14 +10,14 @@ import {
 } from "../services/MessageHandler.js";
 
 interface NaturalEditContentProps {
-  onSectionsChange: (sections: SectionData[]) => void;
+  onSectionChange: (section: SectionData | null) => void;
 }
 
 export function NaturalEditContent({
-  onSectionsChange,
+  onSectionChange,
 }: NaturalEditContentProps) {
-  // State for all code-summary pairs
-  const [sectionList, setSectionList] = useState<SectionData[]>([]);
+  // State for a single code-summary pair
+  const [section, setSection] = useState<SectionData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // State for loading text (progress message)
@@ -28,7 +28,7 @@ export function NaturalEditContent({
     createStatefulMessageHandler(
       setLoading,
       setError,
-      setSectionList,
+      setSection,
       setLoadingText
     )();
   }, []);
@@ -53,10 +53,10 @@ export function NaturalEditContent({
     }
   }, [error]);
 
-  // Update parent component when sections change
+  // Update parent component when section changes
   useEffect(() => {
-    onSectionsChange(sectionList);
-  }, [sectionList, onSectionsChange]);
+    onSectionChange(section);
+  }, [section, onSectionChange]);
 
   return (
     <div style={{ width: "100%" }}>
@@ -111,7 +111,26 @@ export function NaturalEditContent({
           {error}
         </div>
       )}
-      <SectionList sections={sectionList} onSectionsChange={setSectionList} />
+      {section ? (
+        <Section
+          section={section}
+          onEditPrompt={(_, value) => {
+            setSection({
+              ...section,
+              editPromptValue: Array.isArray(value) ? value.join(", ") : value,
+            });
+          }}
+          collapsed={false}
+          onToggle={() => {
+            /* No-op since single section */
+          }}
+          onDeleteSection={() => setSection(null)}
+        />
+      ) : (
+        <div style={{ color: COLORS.DESCRIPTION, marginTop: SPACING.MEDIUM }}>
+          No summary available. Click "Summarize Selected Code" to create one.
+        </div>
+      )}
     </div>
   );
 }
