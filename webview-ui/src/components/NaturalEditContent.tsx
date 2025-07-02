@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react/index.js";
 import { FONT_SIZE, COLORS, SPACING } from "../styles/constants.js";
+//import { ClipLoader } from "react-spinners";
 import SectionList from "./SectionList.js";
 import { SectionData } from "../types/sectionTypes.js";
 import {
