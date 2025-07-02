@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react/index.js";
 import { FONT_SIZE, COLORS, SPACING } from "../styles/constants.js";
-import { ClipLoader } from "react-spinners";
-import Section from "./Section.js";
+import SectionList from "./SectionList.js";
 import { SectionData } from "../types/sectionTypes.js";
 import {
   createStatefulMessageHandler,
@@ -16,47 +15,49 @@ interface NaturalEditContentProps {
 export function NaturalEditContent({
   onSectionChange,
 }: NaturalEditContentProps) {
-  // State for a single code-summary pair
-  const [section, setSection] = useState<SectionData | null>(null);
-  const [loading, setLoading] = useState(false);
+  // State for multiple code-summary pairs and a single section for parent compatibility
+  const [sections, setSections] = useState<SectionData[]>([]);
+  const [singleSection, setSingleSection] = useState<SectionData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // State for loading text (progress message)
-  const [loadingText, setLoadingText] = useState("Summarizing...");
+  const [loading, setLoading] = useState<boolean>(false);
 
-  // Setup message handler with progress callback
+  // Setup message handler without progress callback
   useEffect(() => {
     createStatefulMessageHandler(
-      setLoading,
+      (isLoading) => setLoading(isLoading), // Update loading state
       setError,
-      setSection,
-      setLoadingText
+      setSingleSection // Pass the state setter directly for type compatibility
     )();
   }, []);
 
   // Handler: Summarize Selected Code
   const handleRequestSummary = () => {
-    setLoading(true);
     setError(null);
-    setLoadingText("Summarizing..."); // Reset to default at start
+    setLoading(true);
     requestSummary();
   };
 
-  // Reset loading text on error or when not loading
+  // Update parent component and sections array when singleSection changes
   useEffect(() => {
-    if (!loading) {
-      setLoadingText("Summarizing...");
+    onSectionChange(singleSection);
+    if (singleSection) {
+      setSections((prevSections) => {
+        const existingIndex = prevSections.findIndex(
+          (s) =>
+            s.metadata.fullPath === singleSection.metadata.fullPath &&
+            s.metadata.offset === singleSection.metadata.offset
+        );
+        if (existingIndex >= 0) {
+          const updatedSections = [...prevSections];
+          updatedSections[existingIndex] = singleSection;
+          return updatedSections;
+        } else {
+          return [...prevSections, singleSection];
+        }
+      });
+      setLoading(false); // Ensure loading state is reset after receiving data
     }
-  }, [loading]);
-  useEffect(() => {
-    if (error) {
-      setLoadingText("Summarizing...");
-    }
-  }, [error]);
-
-  // Update parent component when section changes
-  useEffect(() => {
-    onSectionChange(section);
-  }, [section, onSectionChange]);
+  }, [singleSection, onSectionChange]);
 
   return (
     <div style={{ width: "100%" }}>
@@ -69,16 +70,6 @@ export function NaturalEditContent({
       >
         NaturalEdit_Baseline
       </h2>
-      <div
-        style={{
-          color: COLORS.DESCRIPTION,
-          marginBottom: SPACING.MEDIUM,
-          fontSize: FONT_SIZE.SUBTITLE,
-        }}
-      >
-        Transform your code seamlessly by modifying its natural language
-        descriptions.
-      </div>
       <VSCodeButton
         onClick={handleRequestSummary}
         disabled={loading}
@@ -88,18 +79,7 @@ export function NaturalEditContent({
           alignItems: "center",
         }}
       >
-        {loading && (
-          <ClipLoader
-            color={COLORS.BUTTON_FOREGROUND}
-            size={FONT_SIZE.TINY}
-            cssOverride={{
-              borderWidth: "2px",
-              marginRight: SPACING.SMALL,
-            }}
-          />
-        )}
-        {/* Show progress text if loading, otherwise default button text */}
-        {loading ? loadingText : "Summarize Selected Code"}
+        Summarize Selected Code
       </VSCodeButton>
       {error && (
         <div
@@ -111,21 +91,8 @@ export function NaturalEditContent({
           {error}
         </div>
       )}
-      {section ? (
-        <Section
-          section={section}
-          onEditPrompt={(_, value) => {
-            setSection({
-              ...section,
-              editPromptValue: Array.isArray(value) ? value.join(", ") : value,
-            });
-          }}
-          collapsed={false}
-          onToggle={() => {
-            /* No-op since single section */
-          }}
-          onDeleteSection={() => setSection(null)}
-        />
+      {sections.length > 0 ? (
+        <SectionList sections={sections} onSectionsChange={setSections} />
       ) : (
         <div style={{ color: COLORS.DESCRIPTION, marginTop: SPACING.MEDIUM }}>
           No summary available. Click "Summarize Selected Code" to create one.

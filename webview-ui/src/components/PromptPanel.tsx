@@ -9,25 +9,21 @@ import {
   COLORS,
 } from "../styles/constants.js";
 import { usePrompt } from "../hooks/usePrompt.js";
-import { ClipLoader } from "react-spinners";
 
 interface PromptPanelProps {
   section: SectionData;
+  onEditPrompt?: (level: string, value: string | string[]) => void;
 }
 
-const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
-  // Local loading and error state for each action
-  const [loading, setLoading] = useState<{ [action: string]: boolean }>({
-    applyToSummary: false,
-    prompt1: false,
-    prompt2: false,
-  });
+const PromptPanel: React.FC<PromptPanelProps> = ({ section, onEditPrompt }) => {
+  // Local error state for actions
   const [error, setError] = useState<{ [action: string]: string | null }>({
     applyToSummary: null,
     prompt1: null,
     prompt2: null,
   });
-  const { metadata, editPromptValue } = section;
+
+  const { metadata, editPromptValue, summaryData } = section;
   const { onDirectPrompt, onSummaryPrompt } = usePrompt(metadata);
 
   // Direct Prompt state
@@ -38,18 +34,20 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
   const [originalSummary, setOriginalSummary] = useState<string>("");
   const editPromptValueRef = useRef(editPromptValue);
 
-  // Keep currentSummary in sync with editPromptValue
+  // Keep currentSummary in sync with editPromptValue or summaryData.detailed
   useEffect(() => {
-    setCurrentSummary(editPromptValue);
+    setCurrentSummary(editPromptValue || summaryData.detailed);
     editPromptValueRef.current = editPromptValue;
-  }, [editPromptValue]);
+  }, [editPromptValue, summaryData.detailed]);
 
   // Set originalSummary only when entering edit mode (if editPromptValue changes)
   useEffect(() => {
     if (editPromptValue) {
       setOriginalSummary(editPromptValueRef.current);
+    } else if (summaryData.detailed) {
+      setOriginalSummary(summaryData.detailed);
     }
-  }, [editPromptValue]);
+  }, [editPromptValue, summaryData.detailed]);
 
   // Type guard to check if an error has a string message property
   function isErrorWithMessage(err: unknown): err is { message: string } {
@@ -65,49 +63,24 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
   const handleDirectPromptSend = async () => {
     const action = "prompt1";
     if (directPrompt.trim()) {
-      setLoading((prev) => ({ ...prev, [action]: true }));
       setError((prev) => ({ ...prev, [action]: null }));
       try {
         await onDirectPrompt(directPrompt.trim());
-        setLoading((prev) => ({ ...prev, [action]: false }));
         setError((prev) => ({ ...prev, [action]: null }));
       } catch (err: unknown) {
         let errorMsg = "Unknown error";
         if (isErrorWithMessage(err)) {
           errorMsg = err.message;
         }
-        setLoading((prev) => ({ ...prev, [action]: false }));
         setError((prev) => ({ ...prev, [action]: errorMsg }));
       }
     }
   };
 
-  // Apply direct prompt to summary - Removed as per user request to disable direct prompt to summary
-  // const handleApplyToSummary = async () => {
-  //     const action = "applyToSummary";
-  //     if (editPromptLevel && directPrompt.trim()) {
-  //         setLoading(prev => ({ ...prev, [action]: true }));
-  //         setError(prev => ({ ...prev, [action]: null }));
-  //         try {
-  //             await onPromptToSummary(editPromptLevel, originalSummary, directPrompt.trim());
-  //             setLoading(prev => ({ ...prev, [action]: false }));
-  //             setError(prev => ({ ...prev, [action]: null }));
-  //         } catch (err: unknown) {
-  //             let errorMsg = "Unknown error";
-  //             if (isErrorWithMessage(err)) {
-  //                 errorMsg = err.message;
-  //             }
-  //             setLoading(prev => ({ ...prev, [action]: false }));
-  //             setError(prev => ({ ...prev, [action]: errorMsg }));
-  //         }
-  //     }
-  // };
-
   // Commit summary to backend
   const handleSummaryCommit = async () => {
     const action = "prompt2";
     if (currentSummary.trim()) {
-      setLoading((prev) => ({ ...prev, [action]: true }));
       setError((prev) => ({ ...prev, [action]: null }));
       try {
         await onSummaryPrompt(
@@ -115,14 +88,15 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
           currentSummary.trim(),
           originalSummary
         );
-        setLoading((prev) => ({ ...prev, [action]: false }));
+        if (onEditPrompt) {
+          onEditPrompt("detailed", currentSummary.trim());
+        }
         setError((prev) => ({ ...prev, [action]: null }));
       } catch (err: unknown) {
         let errorMsg = "Unknown error";
         if (isErrorWithMessage(err)) {
           errorMsg = err.message;
         }
-        setLoading((prev) => ({ ...prev, [action]: false }));
         setError((prev) => ({ ...prev, [action]: errorMsg }));
       }
     }
@@ -136,29 +110,22 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
           <span style={COMMON_STYLES.SECTION_LABEL}>
             Direct Instruction Prompt
           </span>
-          {loading.prompt1 ? (
-            <ClipLoader color={COLORS.FOREGROUND} size={FONT_SIZE.SMALL} />
-          ) : (
-            <button
-              title="Send Direct Prompt"
-              onClick={handleDirectPromptSend}
-              disabled={!directPrompt.trim() || loading.prompt1}
-              aria-label="Send Direct Prompt"
-              style={{
-                ...COMMON_STYLES.ICON_BUTTON,
-                opacity: !directPrompt.trim() || loading.prompt1 ? 0.5 : 1,
-                cursor:
-                  !directPrompt.trim() || loading.prompt1
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-            >
-              <span
-                className="codicon codicon-send"
-                style={{ fontSize: FONT_SIZE.ICON }}
-              />
-            </button>
-          )}
+          <button
+            title="Send Direct Prompt"
+            onClick={handleDirectPromptSend}
+            disabled={!directPrompt.trim()}
+            aria-label="Send Direct Prompt"
+            style={{
+              ...COMMON_STYLES.ICON_BUTTON,
+              opacity: !directPrompt.trim() ? 0.5 : 1,
+              cursor: !directPrompt.trim() ? "not-allowed" : "pointer",
+            }}
+          >
+            <span
+              className="codicon codicon-send"
+              style={{ fontSize: FONT_SIZE.ICON }}
+            />
+          </button>
         </div>
         <VSCodeTextArea
           value={directPrompt}
@@ -176,46 +143,6 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
           rows={3}
           disabled={false}
         />
-        {/* Removed Apply to Summary button as per user request to disable direct prompt to summary */}
-        {/* <VSCodeButton
-                    appearance="secondary"
-                    onClick={handleApplyToSummary}
-                    disabled={
-                        !directPrompt.trim() ||
-                        !editPromptLevel ||
-                        !summary.trim() ||
-                        loading.applyToSummary
-                    }
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: SPACING.SMALL
-                    }}
-                    title="Apply instruction to summary"
-                    aria-label="Apply instruction to summary"
-                >
-                    {loading.applyToSummary ? (
-                        <>
-                            <ClipLoader
-                                color={COLORS.BUTTON_FOREGROUND}
-                                size={FONT_SIZE.TINY}
-                                cssOverride={{
-                                    borderWidth: '2px',
-                                    marginRight: SPACING.SMALL
-                                }}
-                            />
-                            Applying...
-                        </>
-                    ) : (
-                        <>
-                            <span className="codicon codicon-arrow-down" style={{
-                                fontSize: FONT_SIZE.ICON,
-                                marginRight: SPACING.SMALL
-                            }} />
-                            Apply to Summary
-                        </>
-                    )}
-                </VSCodeButton> */}
         {error.prompt1 && (
           <div style={{ color: COLORS.ERROR, marginTop: SPACING.TINY }}>
             {error.prompt1}
@@ -223,46 +150,47 @@ const PromptPanel: React.FC<PromptPanelProps> = ({ section }) => {
         )}
       </div>
 
+      <hr
+        style={{
+          border: "none",
+          borderTop: "1px solid var(--vscode-panel-border)",
+          margin: `${SPACING.MEDIUM} 0`,
+        }}
+      />
+
       {/* Summary-Mediated Prompt Section */}
       <div>
         <div style={COMMON_STYLES.SECTION_HEADER}>
           <span style={COMMON_STYLES.SECTION_LABEL}>
             Summary-Mediated Prompt (Detailed)
           </span>
-          {loading.prompt2 ? (
-            <ClipLoader color={COLORS.FOREGROUND} size={FONT_SIZE.SMALL} />
-          ) : (
-            <button
-              style={{
-                ...COMMON_STYLES.ICON_BUTTON,
-                opacity:
-                  !currentSummary.trim() ||
-                  currentSummary.trim() === originalSummary ||
-                  loading.prompt2
-                    ? 0.5
-                    : 1,
-                cursor:
-                  !currentSummary.trim() ||
-                  currentSummary.trim() === originalSummary ||
-                  loading.prompt2
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-              title="Send Summary Prompt"
-              onClick={handleSummaryCommit}
-              disabled={
+          <button
+            style={{
+              ...COMMON_STYLES.ICON_BUTTON,
+              opacity:
                 !currentSummary.trim() ||
-                currentSummary.trim() === originalSummary ||
-                loading.prompt2
-              }
-              aria-label="Send Summary Prompt"
-            >
-              <span
-                className="codicon codicon-send"
-                style={{ fontSize: FONT_SIZE.ICON }}
-              />
-            </button>
-          )}
+                currentSummary.trim() === originalSummary
+                  ? 0.5
+                  : 1,
+              cursor:
+                !currentSummary.trim() ||
+                currentSummary.trim() === originalSummary
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+            title="Send Summary Prompt"
+            onClick={handleSummaryCommit}
+            disabled={
+              !currentSummary.trim() ||
+              currentSummary.trim() === originalSummary
+            }
+            aria-label="Send Summary Prompt"
+          >
+            <span
+              className="codicon codicon-send"
+              style={{ fontSize: FONT_SIZE.ICON }}
+            />
+          </button>
         </div>
         <SummaryDiffEditor
           originalSummary={originalSummary}

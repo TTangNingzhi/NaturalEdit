@@ -1,51 +1,25 @@
 import React from "react";
 import { SectionData } from "../types/sectionTypes.js";
 import { SPACING } from "../styles/constants.js";
-import SectionHeader from "./SectionHeader.js";
-import SectionBody from "./SectionBody.js";
+import PromptPanel from "./PromptPanel.js";
 
 interface SectionProps {
   section: SectionData;
   onEditPrompt: (level: string, value: string | string[]) => void;
-  collapsed: boolean;
-  onToggle: () => void;
-  onDeleteSection: () => void;
 }
 
 /**
  * Section component
- * Main container for a code section with summary and prompt functionality
+ * Simplified container for a code section with title and prompt functionality
  */
-const Section: React.FC<SectionProps> = ({
-  section,
-  onEditPrompt,
-  collapsed,
-  onToggle,
-  onDeleteSection,
-}) => {
+const Section: React.FC<SectionProps> = ({ section, onEditPrompt }) => {
   return (
     <div
       style={{
         marginBottom: SPACING.MEDIUM,
-        borderRadius: "5px",
-        overflow: "hidden",
-        boxShadow:
-          "0 2px 4px var(--vscode-widget-shadow), 0 0 0 1px var(--vscode-panel-border)",
       }}
     >
-      <SectionHeader
-        section={section}
-        collapsed={collapsed}
-        onToggle={onToggle}
-        onDeleteSection={onDeleteSection}
-      />
-      {!collapsed && (
-        <SectionBody
-          section={section}
-          onEditPrompt={onEditPrompt}
-          onDeleteSection={onDeleteSection}
-        />
-      )}
+      <PromptPanel section={section} onEditPrompt={onEditPrompt} />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { SectionData } from "../types/sectionTypes.js";
 import Section from "./Section.js";
 
@@ -16,42 +16,25 @@ const SectionList: React.FC<SectionListProps> = ({
   sections,
   onSectionsChange,
 }) => {
-  // State to track the currently opened section
-  const [openedSectionId, setOpenedSectionId] = useState<string | null>(null);
-
-  // Handler for "Edit In Prompt" button (per section)
-  const handleEditPrompt = (id: string, value: string | string[]) => {
-    const stringValue = Array.isArray(value) ? value.join(", ") : value;
-    onSectionsChange(
-      sections.map((s) =>
-        s.metadata.id === id ? { ...s, editPromptValue: stringValue } : s
-      )
-    );
-  };
-
-  // Handler for toggling section open/close
-  const handleToggleSection = (id: string) => {
-    setOpenedSectionId((prevId) => {
-      // If the section is being collapsed (was open and is being closed)
-      if (prevId === id) {
-        // Clear the editPromptValue for the section being collapsed
-        onSectionsChange(
-          sections.map((s) =>
-            s.metadata.id === id
-              ? { ...s, editPromptValue: "", editPromptLevel: null }
-              : s
-          )
-        );
-        return null;
+  // Handler for editing prompts in sections
+  const handleEditPrompt = (
+    id: string,
+    level: string,
+    value: string | string[]
+  ) => {
+    const updatedSections = sections.map((s) => {
+      if (s.metadata.id === id) {
+        return {
+          ...s,
+          summaryData: {
+            ...s.summaryData,
+            [level]: value,
+          },
+        };
       }
-      return id;
+      return s;
     });
-  };
-
-  // Handler for deleting a section by id
-  // Removes the section from the list and updates the parent
-  const handleDeleteSection = (id: string) => {
-    onSectionsChange(sections.filter((s) => s.metadata.id !== id));
+    onSectionsChange(updatedSections);
   };
 
   return (
@@ -60,10 +43,9 @@ const SectionList: React.FC<SectionListProps> = ({
         <Section
           key={section.metadata.id}
           section={section}
-          onEditPrompt={(value) => handleEditPrompt(section.metadata.id, value)}
-          collapsed={section.metadata.id !== openedSectionId}
-          onToggle={() => handleToggleSection(section.metadata.id)}
-          onDeleteSection={() => handleDeleteSection(section.metadata.id)}
+          onEditPrompt={(level, value) =>
+            handleEditPrompt(section.metadata.id, level, value)
+          }
         />
       ))}
     </div>
