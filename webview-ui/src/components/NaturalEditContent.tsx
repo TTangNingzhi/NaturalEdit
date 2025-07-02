@@ -71,6 +71,16 @@ export function NaturalEditContent({
       >
         NaturalEdit_Baseline
       </h2>
+      <div
+        style={{
+          color: COLORS.DESCRIPTION,
+          marginBottom: SPACING.MEDIUM,
+          fontSize: FONT_SIZE.SUBTITLE,
+        }}
+      >
+        Transform your code seamlessly by modifying its natural language
+        descriptions.
+      </div>
       <VSCodeButton
         onClick={handleRequestSummary}
         disabled={loading}
