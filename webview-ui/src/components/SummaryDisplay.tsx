@@ -5,7 +5,7 @@ import {
   COLORS,
   SPACING,
   COMMON_STYLES,
-  BORDER_RADIUS,
+  //BORDER_RADIUS,
 } from "../styles/constants.js";
 
 /**
@@ -23,12 +23,12 @@ interface SummaryDisplayProps {
  */
 const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
   summary,
-  onEditPrompt,
+  //onEditPrompt,
 }) => {
   // Handle "Edit In Prompt" button click
-  const handleEdit = () => {
-    onEditPrompt("detailed", summary.detailed);
-  };
+  // const handleEdit = () => {
+  //   onEditPrompt("detailed", summary.detailed);
+  // };
 
   /**
    * Renders a summary string without mapping highlights.
@@ -42,7 +42,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
 
   return (
     <div style={COMMON_STYLES.SECTION_COMPACT}>
-      {/* Header with edit button */}
+      {/* Header with edit button
       <div style={COMMON_STYLES.SECTION_HEADER}>
         <h3 style={{ margin: 0, fontSize: FONT_SIZE.HEADER }}>
           Detailed Summary
@@ -58,16 +58,16 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
             style={{ fontSize: FONT_SIZE.ICON }}
           />
         </button>
-      </div>
+      </div> */}
 
       {/* Detailed summary card with placeholder */}
       <div
         style={{
           marginBottom: SPACING.SMALL,
           background: COLORS.BACKGROUND,
-          borderRadius: BORDER_RADIUS.SMALL,
           display: "flex",
           alignItems: "flex-start",
+          overflow: "hidden",
         }}
       >
         <div style={{ flex: 1 }}>
@@ -81,6 +81,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
               minHeight: 40,
               background: "none",
               border: "none",
+              overflow: "hidden",
             }}
           >
             {renderSummary(summary.detailed || "")}

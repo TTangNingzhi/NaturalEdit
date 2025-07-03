@@ -17,7 +17,7 @@ export function NaturalEditContent({
   onSectionChange,
 }: NaturalEditContentProps) {
   // State for multiple code-summary pairs and a single section for parent compatibility
-  const [sections, setSections] = useState<SectionData[]>([]);
+  const [section, setSection] = useState<SectionData | null>(null);
   const [singleSection, setSingleSection] = useState<SectionData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -42,20 +42,7 @@ export function NaturalEditContent({
   useEffect(() => {
     onSectionChange(singleSection);
     if (singleSection) {
-      setSections((prevSections) => {
-        const existingIndex = prevSections.findIndex(
-          (s) =>
-            s.metadata.fullPath === singleSection.metadata.fullPath &&
-            s.metadata.offset === singleSection.metadata.offset
-        );
-        if (existingIndex >= 0) {
-          const updatedSections = [...prevSections];
-          updatedSections[existingIndex] = singleSection;
-          return updatedSections;
-        } else {
-          return [...prevSections, singleSection];
-        }
-      });
+      setSection(singleSection);
       setLoading(false); // Ensure loading state is reset after receiving data
     }
   }, [singleSection, onSectionChange]);
@@ -102,13 +89,20 @@ export function NaturalEditContent({
           {error}
         </div>
       )}
-      {sections.length > 0 ? (
-        <SectionList sections={sections} onSectionsChange={setSections} />
-      ) : (
-        <div style={{ color: COLORS.DESCRIPTION, marginTop: SPACING.MEDIUM }}>
-          No summary available. Click "Summarize Selected Code" to create one.
-        </div>
-      )}
+      {/* const defaultSection: SectionData = {
+        metadata: {
+          id: "default",
+          fullPath: 
+        } */}
+
+      {section !== null ? (
+        <SectionList section={section} onSectionChange={setSection} />
+      ) : // ) : (
+      //   <div style={{ color: COLORS.DESCRIPTION, marginTop: SPACING.MEDIUM }}>
+      //     No summary available. Click "Summarize Selected Code" to create one.
+      //   </div>
+
+      null}
     </div>
   );
 }

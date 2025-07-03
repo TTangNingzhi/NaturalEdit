@@ -54,7 +54,6 @@ export const setupMessageHandler = (
             title: msg.title || "Untitled",
             createdAt: Date.now(),
             summaryData: {
-              title: msg.title || "Untitled",
               detailed: msg.data?.detailed || "",
             },
             selectedLevel: "detailed",

@@ -3,8 +3,8 @@ import { SectionData } from "../types/sectionTypes.js";
 import Section from "./Section.js";
 
 interface SectionListProps {
-  sections: SectionData[];
-  onSectionsChange: (sections: SectionData[]) => void;
+  section: SectionData | null;
+  onSectionChange: (sections: SectionData) => void;
 }
 
 /**
@@ -13,43 +13,25 @@ interface SectionListProps {
  * Only one section can be open at a time.
  */
 const SectionList: React.FC<SectionListProps> = ({
-  sections,
-  onSectionsChange,
+  section,
+  onSectionChange,
 }) => {
   // Handler for editing prompts in sections
-  const handleEditPrompt = (
-    id: string,
-    level: string,
-    value: string | string[]
-  ) => {
-    const updatedSections = sections.map((s) => {
-      if (s.metadata.id === id) {
-        return {
-          ...s,
-          summaryData: {
-            ...s.summaryData,
-            [level]: value,
-          },
-        };
-      }
-      return s;
+  const handleEditPrompt = (value: string) => {
+    if (!section) return;
+    onSectionChange({
+      ...section,
+      summaryData: {
+        detailed: value,
+      },
     });
-    onSectionsChange(updatedSections);
   };
 
-  return (
+  return section ? (
     <div>
-      {[...sections].reverse().map((section: SectionData) => (
-        <Section
-          key={section.metadata.id}
-          section={section}
-          onEditPrompt={(level, value) =>
-            handleEditPrompt(section.metadata.id, level, value)
-          }
-        />
-      ))}
+      <Section section={section} onEditPrompt={handleEditPrompt} />
     </div>
-  );
+  ) : null;
 };
 
 export default SectionList;

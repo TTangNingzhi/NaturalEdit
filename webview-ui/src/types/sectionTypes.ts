@@ -4,7 +4,6 @@
  * Represents the summary data for a code section.
  */
 export type SummaryData = {
-  title: string;
   detailed: string;
 };
 
