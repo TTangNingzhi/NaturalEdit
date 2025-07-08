@@ -13,7 +13,6 @@ export const usePrompt = (metadata: SectionMetadata) => {
     }
     return {
         onDirectPrompt: context.onDirectPrompt(metadata),
-        onPromptToSummary: context.onPromptToSummary(metadata),
         onSummaryPrompt: context.onSummaryPrompt(metadata),
     };
 };

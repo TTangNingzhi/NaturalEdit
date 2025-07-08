@@ -141,39 +141,6 @@ export const sendEditSummary = (
     });
 };
 
-/**
- * Send prompt to summary request to VSCode
- * @param sectionId Section identifier
- * @param level Summary level
- * @param summary Current summary value
- * @param prompt Direct instruction to apply
- * @param originalCode The code to be edited
- * @param filename The file name
- * @param fullPath The full file path
- * @param offset The offset in the file
- */
-export const sendPromptToSummary = (
-    sectionId: string,
-    level: string,
-    summary: string,
-    prompt: string,
-    originalCode: string,
-    filename: string,
-    fullPath: string,
-    offset: number
-) => {
-    vscodeApi.postMessage({
-        command: "promptToSummary",
-        summaryText: summary,
-        summaryLevel: level,
-        promptText: prompt,
-        sectionId,
-        originalCode,
-        filename,
-        fullPath,
-        offset
-    });
-};
 
 /**
  * Create a message handler with state management

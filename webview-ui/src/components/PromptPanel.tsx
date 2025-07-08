@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-    VSCodeButton,
     VSCodeTextArea
 } from "@vscode/webview-ui-toolkit/react/index.js";
 import { SummaryDiffEditor } from "./SummaryDiffEditor";
@@ -20,17 +19,15 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
 }) => {
     // Local loading and error state for each action
     const [loading, setLoading] = useState<{ [action: string]: boolean }>({
-        applyToSummary: false,
         prompt1: false,
         prompt2: false,
     });
     const [error, setError] = useState<{ [action: string]: string | null }>({
-        applyToSummary: null,
         prompt1: null,
         prompt2: null,
     });
     const { metadata, editPromptValue } = section;
-    const { onDirectPrompt, onPromptToSummary, onSummaryPrompt } = usePrompt(metadata);
+    const { onDirectPrompt, onSummaryPrompt } = usePrompt(metadata);
 
     // Direct Prompt state
     const [directPrompt, setDirectPrompt] = useState("");
@@ -72,27 +69,6 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
             setError(prev => ({ ...prev, [action]: null }));
             try {
                 await onDirectPrompt(directPrompt.trim());
-                setLoading(prev => ({ ...prev, [action]: false }));
-                setError(prev => ({ ...prev, [action]: null }));
-            } catch (err: unknown) {
-                let errorMsg = "Unknown error";
-                if (isErrorWithMessage(err)) {
-                    errorMsg = err.message;
-                }
-                setLoading(prev => ({ ...prev, [action]: false }));
-                setError(prev => ({ ...prev, [action]: errorMsg }));
-            }
-        }
-    };
-
-    // Apply direct prompt to summary (only detailed)
-    const handleApplyToSummary = async () => {
-        const action = "applyToSummary";
-        if (directPrompt.trim()) {
-            setLoading(prev => ({ ...prev, [action]: true }));
-            setError(prev => ({ ...prev, [action]: null }));
-            try {
-                await onPromptToSummary(originalSummary, directPrompt.trim());
                 setLoading(prev => ({ ...prev, [action]: false }));
                 setError(prev => ({ ...prev, [action]: null }));
             } catch (err: unknown) {
@@ -163,53 +139,13 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     rows={3}
                     disabled={false}
                 />
-                <VSCodeButton
-                    appearance="secondary"
-                    onClick={handleApplyToSummary}
-                    disabled={
-                        !directPrompt.trim() ||
-                        loading.applyToSummary
-                    }
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: SPACING.SMALL
-                    }}
-                    title="Apply instruction to summary"
-                    aria-label="Apply instruction to summary"
-                >
-                    {loading.applyToSummary ? (
-                        <>
-                            <ClipLoader
-                                color={COLORS.BUTTON_FOREGROUND}
-                                size={FONT_SIZE.TINY}
-                                cssOverride={{
-                                    borderWidth: '2px',
-                                    marginRight: SPACING.SMALL
-                                }}
-                            />
-                            Applying...
-                        </>
-                    ) : (
-                        <>
-                            <span className="codicon codicon-arrow-down" style={{
-                                fontSize: FONT_SIZE.ICON,
-                                marginRight: SPACING.SMALL
-                            }} />
-                            Apply to Summary
-                        </>
-                    )}
-                </VSCodeButton>
+                {/* Removed Apply to Summary button */}
                 {error.prompt1 && (
                     <div style={{ color: COLORS.ERROR, marginTop: SPACING.TINY }}>
                         {error.prompt1}
                     </div>
                 )}
-                {error.applyToSummary && (
-                    <div style={{ color: COLORS.ERROR, marginTop: SPACING.TINY }}>
-                        {error.applyToSummary}
-                    </div>
-                )}
+                {/* Removed Apply to Summary error display */}
             </div>
 
             {/* Summary-Mediated Prompt Section */}

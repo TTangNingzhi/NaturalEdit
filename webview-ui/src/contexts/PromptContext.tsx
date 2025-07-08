@@ -8,7 +8,6 @@ import { SectionMetadata } from '../types/sectionTypes.js';
  */
 export interface PromptContextType {
     onDirectPrompt: (metadata: SectionMetadata) => (prompt: string) => Promise<void>;
-    onPromptToSummary: (metadata: SectionMetadata) => (summary: string, prompt: string) => Promise<void>;
     onSummaryPrompt: (metadata: SectionMetadata) => (value: string, originalSummary: string) => Promise<void>;
 }
 

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction } from '../llm/llmApi';
+import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction } from '../llm/llmApi';
 import { getLastActiveEditor } from '../extension';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -185,8 +185,6 @@ export async function handleMessage(
         case 'directPrompt':
             await handleDirectPrompt(message, webviewContainer);
             break;
-        case 'promptToSummary':
-            await handlePromptToSummary(message, webviewContainer);
             break;
         case 'checkSectionValidity':
             await handleCheckSectionValidity(message, webviewContainer);
@@ -262,35 +260,6 @@ async function handleGetSummary(
     }
 }
 
-/**
- * Handles the promptToSummary command.
- * This operation only updates the summary using the LLM and does not require a code selection.
- */
-async function handlePromptToSummary(
-    message: any,
-    webviewContainer: vscode.WebviewPanel | vscode.WebviewView
-) {
-    // Call the LLM to update the summary based on the direct prompt
-    const updatedSummary = await getSummaryFromInstruction(
-        "", // No code context needed for summary update
-        message.summaryText,
-        message.promptText
-    );
-    console.log('promptToSummary:', {
-        summaryText: message.summaryText,
-        summaryLevel: message.summaryLevel,
-        promptText: message.promptText,
-        updatedSummary
-    });
-
-    // Return the updated summary to the frontend
-    webviewContainer.webview.postMessage({
-        command: 'editResult',
-        sectionId: message.sectionId,
-        action: 'promptToSummary',
-        newCode: updatedSummary
-    });
-}
 
 /**
  * Handles the summaryPrompt command with fuzzy patching.
