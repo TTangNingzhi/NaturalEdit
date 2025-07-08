@@ -4,8 +4,6 @@ import {
   getCodeSummary,
   getCodeFromSummaryEdit,
   getCodeFromDirectInstruction,
-  getSummaryFromInstruction,
-  buildSummaryMapping,
 } from "../llm/llmApi";
 import { getLastActiveEditor } from "../extension";
 import * as fs from "fs";
@@ -260,12 +258,6 @@ async function handleGetSummary(
       ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}`
       : "";
 
-    const detailedMappings = await buildSummaryMapping(
-      selectedText,
-      summary.detailed
-    );
-    console.log("detailedMappings", detailedMappings);
-
     // Final result: send summaryResult to frontend
     webviewContainer.webview.postMessage({
       command: "summaryResult",
@@ -277,9 +269,6 @@ async function handleGetSummary(
       createdAt: new Date().toLocaleString(),
       originalCode: selectedText,
       offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
-      summaryMappings: {
-        detailed: detailedMappings,
-      },
     });
   } catch (err: any) {
     webviewContainer.webview.postMessage({
@@ -317,7 +306,6 @@ async function handleSummaryPrompt(
   const newCode = await getCodeFromSummaryEdit(
     originalCode,
     message.summaryText,
-    "detailed",
     fileContext,
     message.originalSummary
   );
@@ -441,10 +429,10 @@ async function openFile(
   const fileUri = fullPath
     ? vscode.Uri.file(fullPath)
     : vscode.Uri.file(
-        path.isAbsolute(filename)
-          ? filename
-          : path.join(vscode.workspace.rootPath || "", filename)
-      );
+      path.isAbsolute(filename)
+        ? filename
+        : path.join(vscode.workspace.rootPath || "", filename)
+    );
 
   try {
     // Check if file exists before opening
@@ -530,7 +518,7 @@ async function applyCodeChanges(
       // Clean up temp file if patch failed
       try {
         fs.unlinkSync(tempFilePath);
-      } catch {}
+      } catch { }
       diffStateMap.delete(fileUri.fsPath);
       return;
     }

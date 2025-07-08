@@ -21,7 +21,7 @@ export class NaturalEditViewProvider implements vscode.WebviewViewProvider {
      */
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
+        _context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
         // Always enable scripts in the webview

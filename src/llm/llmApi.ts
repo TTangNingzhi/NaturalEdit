@@ -183,84 +183,6 @@ ${code}
 }
 
 /**
- * Build summary-to-code mapping for a given summary and code using LLM.
- * Supports multiple, possibly non-contiguous code ranges per summary component.
- * @param code The code to map
- * @param summaryText The summary text (concise, detailed, or a bullet)
- */
-export async function buildSummaryMapping(
-  code: string,
-  summaryText: string
-): Promise<
-  {
-    summaryComponent: string;
-    codeRanges: [number, number][];
-  }[]
-> {
-  // The prompt now explicitly requires that each summaryComponent must be a substring of the summary.
-  const prompt = `
-You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 7 key summary components (phrases or semantic units) from the summary.
-IMPORTANT:
-1. Each summaryComponent you extract MUST be a substring (exact part) of the summary text below.
-2. Extract summaryComponents in the exact order they appear in the summary text.
-3. Do NOT hallucinate or invent summary components that do not appear in the summary.
-4. If a code snippet contains multiple lines, split them into separate strings in the codeSnippets array.
-
-For each summaryComponent, extract one or more relevant code snippets (as string, not line numbers) from the code that best match the meaning of the summary component.
-- Prefer to use a complete code statement (such as a full line, assignment, function definition, or block) as the code snippet if it clearly represents the summary component's meaning.
-- If a full statement is not appropriate or would be ambiguous, you should use a smaller, relevant fragment (such as a variable, function name, operator, or part of an expression).
-- Only include enough code to make the mapping meaningful and unambiguous.
-- If a code snippet contains multiple lines, split them into separate strings in the codeSnippets array.
-
-Return as a JSON array of objects:
-[
-  { "summaryComponent": "...", "codeSnippets": ["code fragment 1", "code fragment 2"] },
-  ...
-]
-
-Code:
-${code}
-
-Summary:
-${summaryText}
-`;
-
-  const raw = await callLLM(prompt, false);
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e1) {
-    // Try cleaning code block markers and parse again
-    const cleaned = cleanLLMCodeBlock(raw);
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (e2) {
-      throw new Error("Failed to parse LLM response as JSON: " + cleaned);
-    }
-  }
-
-  // Post-processing: filter and log any summaryComponent that is not a substring of the summaryText
-  if (Array.isArray(parsed)) {
-    const filtered = parsed.filter((item) => {
-      if (
-        typeof item.summaryComponent === "string" &&
-        !summaryText.includes(item.summaryComponent)
-      ) {
-        // Log a warning if hallucinated summaryComponent is found
-        console.warn(
-          `[buildSummaryMapping] summaryComponent not found in summary:`,
-          item.summaryComponent
-        );
-        return false;
-      }
-      return true;
-    });
-    return filtered;
-  }
-  return [];
-}
-
-/**
  * Get code changes based on a summary edit
  * @param originalCode The original code to modify
  * @param editedSummary The edited summary that describes the desired changes
@@ -330,50 +252,6 @@ Instruction:
 ${instruction}
 
 Updated code:
-`;
-
-  const content = await callLLM(prompt);
-  return cleanLLMCodeBlock(content);
-}
-
-/**
- * Get summary changes based on a direct instruction
- * @param originalCode The original code context
- * @param originalSummary The original summary to modify
- * @param instruction The direct instruction for summary changes
- * @returns The modified summary
- */
-export async function getSummaryFromInstruction(
-  originalCode: string,
-  originalSummary: string,
-  instruction: string
-): Promise<string> {
-  const prompt = `
-You are an expert at editing code summaries. In this scenario, a developer is using a summary-mediated approach to modify code:
-1. Instead of directly editing the code, the developer modifies the summary to express their desired code behavior.
-2. The modified summary will later be used to generate the actual code changes.
-3. Your task is to integrate the developer's instruction into the summary, making it clear what the new code should do.
-
-Given the following original summary and a direct instruction, update the summary to incorporate the developer's intent:
-- The code context below is provided ONLY for reference to help understand the summary's environment.
-- Preserve the parts of the original summary that are not affected by the instruction.
-- Maintain the original summary format (sentence, bullet points, etc.).
-- Make it easy to identify what changed by keeping unchanged parts exactly as they were.
-- Integrate the instruction seamlessly into existing sentences or bullet points as much as possible.
-- However, add new sentences or bullet points if the instruction cannot be naturally integrated into existing ones.
-- The updated summary MUST clearly express what the new code should do, incorporating ALL information from the instruction.
-- Output only the updated summary, nothing else.
-
-Code Context (for reference only):
-${originalCode}
-
-Original summary:
-${originalSummary}
-
-Developer's instruction (integrate this intent fully into the updated summary):
-${instruction}
-
-Updated summary:
 `;
 
   const content = await callLLM(prompt);
