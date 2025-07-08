@@ -56,7 +56,7 @@ export function NaturalEditContent({
           fontSize: FONT_SIZE.TITLE,
         }}
       >
-        NaturalEdit_Baseline
+        PASTA
       </h2>
       <div
         style={{
@@ -89,20 +89,9 @@ export function NaturalEditContent({
           {error}
         </div>
       )}
-      {/* const defaultSection: SectionData = {
-        metadata: {
-          id: "default",
-          fullPath: 
-        } */}
-
       {section !== null ? (
         <SectionList section={section} onSectionChange={setSection} />
-      ) : // ) : (
-      //   <div style={{ color: COLORS.DESCRIPTION, marginTop: SPACING.MEDIUM }}>
-      //     No summary available. Click "Summarize Selected Code" to create one.
-      //   </div>
-
-      null}
+      ) : null}
     </div>
   );
 }
