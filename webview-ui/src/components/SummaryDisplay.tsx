@@ -6,15 +6,29 @@ import { FONT_SIZE, COLORS, SPACING, BORDER_RADIUS, COMMON_STYLES } from "../sty
  */
 interface SummaryDisplayProps {
     summary: string;
+    onEditSummary?: (summary: string) => void;
 }
 
 /**
  * SummaryDisplay component (baseline)
  * - Shows only the detailed summary as plain text
+ * - Includes an edit button to load summary into the Summary-Mediated Prompt editor
  */
-const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary }) => {
+const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, onEditSummary }) => {
     return (
         <div style={COMMON_STYLES.SECTION_COMPACT}>
+            {/* Top row: label left, edit button right */}
+            <div style={COMMON_STYLES.SECTION_HEADER}>
+                <span style={COMMON_STYLES.SECTION_LABEL}>Code Summary</span>
+                <button
+                    style={COMMON_STYLES.ICON_BUTTON}
+                    aria-label="Edit In Prompt"
+                    title="Edit In Prompt"
+                    onClick={() => onEditSummary && onEditSummary(summary)}
+                >
+                    <span className="codicon codicon-edit" style={{ fontSize: FONT_SIZE.ICON }} />
+                </button>
+            </div>
             <div style={{
                 marginBottom: SPACING.SMALL,
                 background: COLORS.BACKGROUND,

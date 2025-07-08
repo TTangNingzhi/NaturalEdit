@@ -17,6 +17,8 @@ export function NaturalEditContent() {
 
     // Section validity state
     const [validityStatus, setValidityStatus] = useState<"pending" | "success" | "file_missing" | "code_not_matched">("pending");
+    // State for summary edit button: value to load into PromptPanel
+    const [editSummaryValue, setEditSummaryValue] = useState<string | null>(null);
 
     // Setup message handler with progress callback
     useEffect(() => {
@@ -144,8 +146,9 @@ export function NaturalEditContent() {
                 }}>
                     <SummaryDisplay
                         summary={section.summaryData}
+                        onEditSummary={setEditSummaryValue}
                     />
-                    <PromptPanel section={section} />
+                    <PromptPanel section={section} editSummaryValue={editSummaryValue} />
                     {validityStatus !== "success" && validityStatus !== "pending" && (
                         <div
                             style={{

@@ -11,10 +11,12 @@ import { ClipLoader } from "react-spinners";
 
 interface PromptPanelProps {
     section: SectionData;
+    editSummaryValue?: string | null;
 }
 
 const PromptPanel: React.FC<PromptPanelProps> = ({
-    section
+    section,
+    editSummaryValue
 }) => {
     // Local loading and error state for each action
     const [loading, setLoading] = useState<{ [action: string]: boolean }>({
@@ -43,6 +45,14 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
         setCurrentSummary(editPromptValue);
         setOriginalSummary(editPromptValue);
     }, [editPromptValue]);
+
+    // If editSummaryValue is set (from edit button), load it into the diff editor
+    React.useEffect(() => {
+        if (editSummaryValue !== undefined && editSummaryValue !== null) {
+            setCurrentSummary(editSummaryValue);
+            setOriginalSummary(editSummaryValue);
+        }
+    }, [editSummaryValue]);
 
     // Type guard to check if an error has a string message property
     function isErrorWithMessage(err: unknown): err is { message: string } {
