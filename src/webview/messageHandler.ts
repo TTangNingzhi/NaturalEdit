@@ -1,30 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction, buildSummaryMapping } from '../llm/llmApi';
+import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction } from '../llm/llmApi';
 import { getLastActiveEditor } from '../extension';
 import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import DiffMatchPatch from 'diff-match-patch';
-
-// Color palette for summary-code mapping highlights (must match frontend)
-const SUMMARY_CODE_MAPPING_COLORS = [
-    "#A3D3FF", // blue
-    "#FFB3C6", // pink
-    "#B9FBC0", // green
-    "#FFD6A5", // orange
-    "#D0BFFF", // purple
-    "#FFFACD", // yellow
-    "#FFDAC1"  // peach
-];
-
-// Constants for code matching
-const BITAP_LIMIT = 32;
-const MIN_MATCH_SCORE = 0.9;
-
-// Persistent variables to track current highlight decoration
-let currentHighlightDecoration: vscode.TextEditorDecorationType | null = null;
-let currentHighlightEditor: vscode.TextEditor | null = null;
 
 /**
  * Map to track temp file associations for diff/accept/reject workflow.
@@ -35,6 +16,9 @@ const diffStateMap: Map<string, { tempFilePath: string }> = new Map();
 /**
  * Interface for match result
  */
+const BITAP_LIMIT = 32;
+const MIN_MATCH_SCORE = 0.9;
+
 interface MatchResult {
     location: number;
     score?: number;
@@ -204,110 +188,12 @@ export async function handleMessage(
         case 'promptToSummary':
             await handlePromptToSummary(message, webviewContainer);
             break;
-        case 'highlightCodeMapping':
-            await handleHighlightCodeMapping(message);
-            break;
-        case 'clearHighlight':
-            await handleClearHighlight();
-            break;
         case 'checkSectionValidity':
             await handleCheckSectionValidity(message, webviewContainer);
             break;
     }
 }
 
-/**
- * Handles the highlightCodeMapping command from the webview.
- * Finds the code snippet in the open editor and applies a highlight decoration.
- * @param message The message containing codeSnippet, filename/fullPath, colorIndex
- */
-async function handleHighlightCodeMapping(message: any) {
-    // Remove any previous highlight
-    await handleClearHighlight();
-
-    const editor = getLastActiveEditor();
-    if (!editor) {
-        console.warn("[highlightCodeMapping] No active editor found.");
-        return;
-    }
-
-    const { selectedCode, codeSnippets, colorIndex, filename, fullPath } = message;
-
-    if (typeof selectedCode !== "string" || !Array.isArray(codeSnippets) || typeof colorIndex !== "number") {
-        console.warn("[highlightCodeMapping] Invalid selectedCode, codeSnippets, or colorIndex.");
-        return;
-    }
-
-    // Check file path match
-    const editorPath = editor.document.fileName;
-    if (fullPath && editorPath !== fullPath) {
-        return;
-    }
-
-    const docText = editor.document.getText();
-
-    // 1. Find the selectedCode region in the file
-    const regionMatch = findBestMatch(docText, selectedCode);
-    if (regionMatch.location === -1) {
-        console.warn("[highlightCodeMapping] Could not find selectedCode region in file.");
-        return;
-    }
-
-    const regionStart = regionMatch.location;
-    const regionEnd = regionStart + selectedCode.length;
-    const regionText = docText.slice(regionStart, regionEnd);
-
-    // 2. For each codeSnippet, search within regionText
-    const allRanges: vscode.Range[] = [];
-    for (const snippet of codeSnippets) {
-        if (!snippet || !snippet.trim()) { continue; }
-        const pattern = snippet.replace(/\r\n/g, "\n");
-
-        // Find the best match within the region
-        const match = findBestMatch(regionText, pattern);
-        if (match.location !== -1) {
-            // Map regionText offset to docText offset
-            const absStart = regionStart + match.location;
-            const absEnd = absStart + pattern.length;
-            const start = editor.document.positionAt(absStart);
-            const end = editor.document.positionAt(absEnd);
-            allRanges.push(new vscode.Range(start, end));
-        } else {
-            console.warn("[highlightCodeMapping] Could not match codeSnippet in selectedCode region:", { snippet, selectedCode });
-        }
-    }
-
-    if (allRanges.length > 0) {
-        // Create a decoration type with the correct color and some transparency
-        const color = SUMMARY_CODE_MAPPING_COLORS[colorIndex % SUMMARY_CODE_MAPPING_COLORS.length] + "80";
-        const decorationType = vscode.window.createTextEditorDecorationType({
-            backgroundColor: color,
-            isWholeLine: false,
-            borderRadius: "3px"
-        });
-
-        // Apply the decoration to all matched ranges
-        editor.setDecorations(decorationType, allRanges);
-        // Store for later removal
-        currentHighlightDecoration = decorationType;
-        currentHighlightEditor = editor;
-    } else {
-        console.warn("[highlightCodeMapping] No code regions found to highlight.");
-    }
-}
-
-/**
- * Handles the clearHighlight command from the webview.
- * Removes any existing highlight decoration from the editor.
- */
-async function handleClearHighlight() {
-    if (currentHighlightDecoration && currentHighlightEditor) {
-        currentHighlightEditor.setDecorations(currentHighlightDecoration, []);
-        currentHighlightDecoration.dispose();
-    }
-    currentHighlightDecoration = null;
-    currentHighlightEditor = null;
-}
 
 /**
  * Generates file context including file name, path and content
@@ -344,7 +230,7 @@ async function handleGetSummary(
     }
 
     try {
-        // Stage 1: Generating summary
+        // Generating summary
         webviewContainer.webview.postMessage({
             command: 'summaryProgress',
             stage: 1,
@@ -357,33 +243,6 @@ async function handleGetSummary(
         const fullPath = editor?.document.fileName || '';
         const lines = editor ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}` : '';
 
-        // Stage 2: Mapping concise summary
-        webviewContainer.webview.postMessage({
-            command: 'summaryProgress',
-            stage: 2,
-            stageText: 'Building mapping for concise summary...'
-        });
-        const conciseMappings = await buildSummaryMapping(selectedText, summary.concise);
-        console.log('conciseMappings', conciseMappings);
-
-        // Stage 3: Mapping detailed summary
-        webviewContainer.webview.postMessage({
-            command: 'summaryProgress',
-            stage: 3,
-            stageText: 'Building mapping for detailed summary...'
-        });
-        const detailedMappings = await buildSummaryMapping(selectedText, summary.detailed);
-        console.log('detailedMappings', detailedMappings);
-
-        // Stage 4: Mapping bullet points
-        webviewContainer.webview.postMessage({
-            command: 'summaryProgress',
-            stage: 4,
-            stageText: 'Building mapping for bullet points...'
-        });
-        const bulletsMappings = await buildSummaryMapping(selectedText, summary.bullets.join(" "));
-        console.log('bulletsMappings', bulletsMappings);
-
         // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({
             command: 'summaryResult',
@@ -391,16 +250,9 @@ async function handleGetSummary(
             filename,
             fullPath,
             lines,
-            title: summary.title,
-            concise: summary.concise,
             createdAt: new Date().toLocaleString(),
             originalCode: selectedText,
-            offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
-            summaryMappings: {
-                concise: conciseMappings,
-                detailed: detailedMappings,
-                bullets: bulletsMappings
-            }
+            offset: editor ? editor.document.offsetAt(editor.selection.start) : 0
         });
     } catch (err: any) {
         webviewContainer.webview.postMessage({
@@ -422,7 +274,6 @@ async function handlePromptToSummary(
     const updatedSummary = await getSummaryFromInstruction(
         "", // No code context needed for summary update
         message.summaryText,
-        message.summaryLevel,
         message.promptText
     );
     console.log('promptToSummary:', {
@@ -464,7 +315,6 @@ async function handleSummaryPrompt(
     const newCode = await getCodeFromSummaryEdit(
         originalCode,
         message.summaryText,
-        message.summaryLevel,
         fileContext,
         message.originalSummary
     );

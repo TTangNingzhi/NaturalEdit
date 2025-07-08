@@ -1,40 +1,9 @@
 // Types and utilities for section data and summaries
 
 /**
- * Represents the summary data for a code section.
+ * Represents the summary data for a code section (baseline: only detailed summary).
  */
-export type SummaryData = {
-    title: string;
-    concise: string;
-    detailed: string;
-    bullets: string[];
-};
-
-/**
- * Represents a mapping between a summary component and one or more code segments.
- * - summaryComponent: The phrase or component from the summary.
- * - codeSnippets: An array of code fragments (to be fuzzy-matched to code ranges in frontend).
- *
- * Example (one-shot, based on the classic screenshot):
- * summary: "Find the name of the continent with the highest average population by country."
- * code: (lines 0-13)
- * summaryMappings: {
- *   concise: [
- *     { summaryComponent: "name of the continent", codeSnippets: ["..."] },
- *     { summaryComponent: "highest", codeSnippets: ["..."] },
- *     { summaryComponent: "average population", codeSnippets: ["..."] },
- *     { summaryComponent: "by country", codeSnippets: ["..."] }
- *   ],
- *   detailed: [...],
- *   bulleted: [...]
- * }
- */
-export interface SummaryCodeMapping {
-    summaryComponent: string;
-    codeSnippets: string[]; // Array of code fragments (to be fuzzy-matched to code ranges in frontend)
-}
-
-export type SummaryLevel = "concise" | "detailed" | "bullets";
+export type SummaryData = string;
 
 /**
  * Metadata for a code section.
@@ -49,41 +18,27 @@ export interface SectionMetadata {
 }
 
 /**
- * Data structure for a code section with its summary and state.
+ * Data structure for a code section with its summary and state (baseline).
  */
 export interface SectionData {
     metadata: SectionMetadata;
     lines: [number, number];
     title: string;
-    concise: string;
     createdAt: number;
-    summaryData: SummaryData;
-    selectedLevel: SummaryLevel;
-    editPromptLevel: SummaryLevel | null;
+    summaryData: SummaryData; // string
     editPromptValue: string;
-    summaryMappings: {
-        concise: SummaryCodeMapping[];
-        detailed: SummaryCodeMapping[];
-        bullets: SummaryCodeMapping[];
-    };
 }
 
-// Message from VSCode containing summary data
+// Message from VSCode containing summary data (baseline)
 export interface SummaryResultMessage {
     command: string;
     error?: string;
-    data?: SummaryData;
+    data?: SummaryData; // string
     filename?: string;
     lines?: string;
     title?: string;
-    concise?: string;
     createdAt?: string;
     originalCode?: string;
     fullPath?: string;
     offset?: number;
-    summaryMappings?: {
-        concise: SummaryCodeMapping[];
-        detailed: SummaryCodeMapping[];
-        bullets: SummaryCodeMapping[];
-    };
 }

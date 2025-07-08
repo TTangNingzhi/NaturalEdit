@@ -48,13 +48,9 @@ export const setupMessageHandler = (
                         },
                         lines: [parseInt(msg.lines?.split('-')[0] || '0'), parseInt(msg.lines?.split('-')[1] || '0')],
                         title: msg.title || "Untitled",
-                        concise: msg.concise || "",
                         createdAt: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
                         summaryData: msg.data,
-                        selectedLevel: "concise",
-                        editPromptLevel: null,
-                        editPromptValue: "",
-                        summaryMappings: msg.summaryMappings || { concise: [], detailed: [], bullets: [] }
+                        editPromptValue: ""
                     });
                 }
             } else if ("command" in message && message.command === "editResult" && onEditResult) {

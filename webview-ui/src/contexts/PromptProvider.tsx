@@ -2,7 +2,7 @@ import React from 'react';
 import { PromptContext, PromptContextType } from './PromptContext.js';
 import { sendDirectPrompt, sendPromptToSummary, sendEditSummary } from '../services/MessageHandler.js';
 
-import { SectionMetadata, SummaryLevel } from '../types/sectionTypes.js';
+import { SectionMetadata } from '../types/sectionTypes.js';
 
 export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const value: PromptContextType = {
@@ -30,7 +30,7 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 );
             });
         },
-        onPromptToSummary: (metadata: SectionMetadata) => (level: SummaryLevel, summary: string, prompt: string) => {
+        onPromptToSummary: (metadata: SectionMetadata) => (summary: string, prompt: string) => {
             return new Promise<void>((resolve, reject) => {
                 const listener = (event: MessageEvent) => {
                     const message = event.data;
@@ -46,7 +46,7 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 window.addEventListener('message', listener);
                 sendPromptToSummary(
                     metadata.id,
-                    level,
+                    "detailed",
                     summary,
                     prompt,
                     metadata.originalCode,
@@ -56,7 +56,7 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 );
             });
         },
-        onSummaryPrompt: (metadata: SectionMetadata) => (level: SummaryLevel, value: string, originalSummary: string) => {
+        onSummaryPrompt: (metadata: SectionMetadata) => (value: string, originalSummary: string) => {
             return new Promise<void>((resolve, reject) => {
                 const listener = (event: MessageEvent) => {
                     const message = event.data;
@@ -72,7 +72,7 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 window.addEventListener('message', listener);
                 sendEditSummary(
                     metadata.id,
-                    level,
+                    "detailed",
                     value,
                     metadata.originalCode,
                     metadata.filename,

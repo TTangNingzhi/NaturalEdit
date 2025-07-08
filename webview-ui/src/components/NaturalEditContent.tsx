@@ -17,19 +17,15 @@ export function NaturalEditContent() {
 
     // Section validity state
     const [validityStatus, setValidityStatus] = useState<"pending" | "success" | "file_missing" | "code_not_matched">("pending");
-    // Highlight state for summary mappings
-    const [activeMappingIndex, setActiveMappingIndex] = useState<number | null>(null);
 
     // Setup message handler with progress callback
     useEffect(() => {
         // Handler updates the single section (assume always index 0 if array returned)
         createStatefulMessageHandler(setLoading, setError, (sectionsOrUpdater) => {
-            // Handle both array and updater function
             let sections: SectionData[] = [];
             if (Array.isArray(sectionsOrUpdater)) {
                 sections = sectionsOrUpdater;
             } else if (typeof sectionsOrUpdater === "function") {
-                // Simulate updater with empty array (should not happen in baseline)
                 sections = sectionsOrUpdater([]);
             }
             setSection(sections && sections.length > 0 ? sections[0] : null);
@@ -92,31 +88,7 @@ export function NaturalEditContent() {
         overlayMessage = "Code snippet cannot be matched.";
     }
 
-    // Handle summary mapping hover
-    const handleMappingHover = (index: number | null) => {
-        setActiveMappingIndex(index);
-        if (!section) return;
-        const { filename, fullPath } = section.metadata;
-        const rawMappings = section.summaryMappings?.[section.selectedLevel] || [];
-        if (index !== null && rawMappings[index]) {
-            const codeSnippets = rawMappings[index].codeSnippets || [];
-            const selectedCode = section.metadata.originalCode || "";
-            vscodeApi.postMessage({
-                command: "highlightCodeMapping",
-                selectedCode,
-                codeSnippets,
-                filename,
-                fullPath,
-                colorIndex: index
-            });
-        } else {
-            vscodeApi.postMessage({
-                command: "clearHighlight",
-                filename,
-                fullPath
-            });
-        }
-    };
+    // All mapping/highlight logic removed for baseline
 
     return (
         <div style={{ width: "100%" }}>
@@ -172,12 +144,6 @@ export function NaturalEditContent() {
                 }}>
                     <SummaryDisplay
                         summary={section.summaryData}
-                        selectedLevel={section.selectedLevel}
-                        onLevelChange={() => { }} // No-op or implement if needed
-                        onEditPrompt={() => { }} // No-op or implement if needed
-                        summaryCodeMappings={section.summaryMappings?.[section.selectedLevel] || []}
-                        activeMappingIndex={activeMappingIndex}
-                        onMappingHover={handleMappingHover}
                     />
                     <PromptPanel section={section} />
                     {validityStatus !== "success" && validityStatus !== "pending" && (
