@@ -106,7 +106,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     return (
         <div style={COMMON_STYLES.SECTION_COMPACT}>
             {/* Direct Instruction Prompt Section */}
-            <div style={{ marginBottom: SPACING.MEDIUM }}>
+            <div style={{ marginBottom: SPACING.SMALL }}>
                 <div style={COMMON_STYLES.SECTION_HEADER}>
                     <span style={COMMON_STYLES.SECTION_LABEL}>Direct Instruction Prompt</span>
                     {loading.prompt1 ? (
