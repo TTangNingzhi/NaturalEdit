@@ -4,7 +4,7 @@ import { NaturalEditContent } from "./components/NaturalEditContent.js";
 function App() {
   return (
     <PromptProvider>
-      <NaturalEditContent onSectionChange={() => {}} />
+      <NaturalEditContent />
     </PromptProvider>
   );
 }

@@ -1,95 +1,58 @@
 import React from "react";
-import { SummaryData } from "../types/sectionTypes.js";
-import {
-  FONT_SIZE,
-  COLORS,
-  SPACING,
-  COMMON_STYLES,
-  //BORDER_RADIUS,
-} from "../styles/constants.js";
+import { FONT_SIZE, COLORS, SPACING, BORDER_RADIUS, COMMON_STYLES } from "../styles/constants.js";
 
 /**
- * Props for the SummaryDisplay component
+ * Props for the SummaryDisplay component (baseline: only a string summary)
  */
 interface SummaryDisplayProps {
-  summary: SummaryData;
-  onEditPrompt: (level: string, value: string | string[]) => void;
+    summary: string;
+    onEditSummary?: (summary: string) => void;
 }
 
 /**
- * SummaryDisplay component
- * - Shows the detailed summary with an "Edit In Prompt" button
- * - Uses VSCode Webview UI Toolkit React components
+ * SummaryDisplay component (baseline)
+ * - Shows only the detailed summary as plain text
+ * - Includes an edit button to load summary into the Summary-Mediated Prompt editor
  */
-const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
-  summary,
-  //onEditPrompt,
-}) => {
-  // Handle "Edit In Prompt" button click
-  // const handleEdit = () => {
-  //   onEditPrompt("detailed", summary.detailed);
-  // };
-
-  /**
-   * Renders a summary string without mapping highlights.
-   * This function simply returns the text or a placeholder if the text is empty.
-   */
-  const renderSummary = (text: string) => {
+const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, onEditSummary }) => {
     return (
-      text || <span style={{ color: COLORS.DESCRIPTION }}>Summary...</span>
-    );
-  };
-
-  return (
-    <div style={COMMON_STYLES.SECTION_COMPACT}>
-      {/* Header with edit button
-      <div style={COMMON_STYLES.SECTION_HEADER}>
-        <h3 style={{ margin: 0, fontSize: FONT_SIZE.HEADER }}>
-          Detailed Summary
-        </h3>
-        <button
-          style={COMMON_STYLES.ICON_BUTTON}
-          aria-label="Edit In Prompt"
-          title="Edit In Prompt"
-          onClick={handleEdit}
-        >
-          <span
-            className="codicon codicon-edit"
-            style={{ fontSize: FONT_SIZE.ICON }}
-          />
-        </button>
-      </div> */}
-
-      {/* Detailed summary card with placeholder */}
-      <div
-        style={{
-          marginBottom: SPACING.SMALL,
-          background: COLORS.BACKGROUND,
-          display: "flex",
-          alignItems: "flex-start",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <pre
-            style={{
-              margin: 0,
-              whiteSpace: "pre-line",
-              fontFamily: "var(--vscode-font-family)",
-              fontSize: FONT_SIZE.BODY,
-              color: COLORS.FOREGROUND,
-              minHeight: 40,
-              background: "none",
-              border: "none",
-              overflow: "hidden",
-            }}
-          >
-            {renderSummary(summary.detailed || "")}
-          </pre>
+        <div style={COMMON_STYLES.SECTION_COMPACT}>
+            {/* Top row: label left, edit button right */}
+            <div style={COMMON_STYLES.SECTION_HEADER}>
+                <span style={COMMON_STYLES.SECTION_LABEL}>Natural Language Summary</span>
+                <button
+                    style={COMMON_STYLES.ICON_BUTTON}
+                    aria-label="Edit In Prompt"
+                    title="Edit In Prompt"
+                    onClick={() => onEditSummary && onEditSummary(summary)}
+                >
+                    <span className="codicon codicon-edit" style={{ fontSize: FONT_SIZE.ICON }} />
+                </button>
+            </div>
+            <div style={{
+                marginBottom: SPACING.SMALL,
+                background: COLORS.BACKGROUND,
+                borderRadius: BORDER_RADIUS.SMALL,
+                display: "flex",
+                alignItems: "flex-start"
+            }}>
+                <div style={{ flex: 1 }}>
+                    <pre style={{
+                        margin: 0,
+                        whiteSpace: "pre-line",
+                        fontFamily: "var(--vscode-font-family)",
+                        fontSize: FONT_SIZE.BODY,
+                        color: COLORS.FOREGROUND,
+                        minHeight: 40,
+                        background: "none",
+                        border: "none"
+                    }}>
+                        {summary || <span style={{ color: COLORS.DESCRIPTION }}>Summary...</span>}
+                    </pre>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default SummaryDisplay;
