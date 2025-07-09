@@ -127,12 +127,12 @@ export const SummaryDiffEditor: React.FC<SummaryDiffEditorProps> = ({
                         value={editValue}
                         onInput={e => setEditValue((e.target as HTMLTextAreaElement).value)}
                         onBlur={handleBlurOrSubmit}
-                        rows={Math.max(3, editValue.split("\n").length)}
+                        rows={Math.max(5, editValue.split("\n").length)}
                         style={{
                             width: "100%",
                             fontFamily: "monospace",
                             fontSize: `${FONT_SIZE.SMALL}px`,
-                            minHeight: "4em"
+                            minHeight: "6em"
                         }}
                         placeholder="Load the summary above and edit here."
                     />
@@ -142,7 +142,7 @@ export const SummaryDiffEditor: React.FC<SummaryDiffEditorProps> = ({
                     onClick={handleDiffClick}
                     style={{
                         cursor: "pointer",
-                        minHeight: "4em",
+                        minHeight: "6em",
                         padding: "8px",
                         border: "1px solid var(--vscode-input-border, #3c3c3c)",
                         borderRadius: "4px",
