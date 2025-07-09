@@ -20,6 +20,13 @@ export function NaturalEditContent() {
     // State for summary edit button: value to load into PromptPanel
     const [editSummaryValue, setEditSummaryValue] = useState<string | null>(null);
 
+    // Always update summary area, even if the same summary is selected
+    const handleEditSummary = (summary: string) => {
+        // Force clear first to ensure PromptPanel always updates
+        setEditSummaryValue(null);
+        setTimeout(() => setEditSummaryValue(summary), 0);
+    };
+
     // Setup message handler with progress callback
     useEffect(() => {
         // Handler updates the single section (assume always index 0 if array returned)
@@ -30,12 +37,17 @@ export function NaturalEditContent() {
             } else if (typeof sectionsOrUpdater === "function") {
                 sections = sectionsOrUpdater([]);
             }
-            setSection(sections && sections.length > 0 ? sections[0] : null);
+            const newSection = sections && sections.length > 0 ? sections[0] : null;
+            setSection(newSection);
+            // When a new summary is generated, clear the summary area in PromptPanel
+            setEditSummaryValue("");
         }, setLoadingText)();
     }, []);
 
     // Handler: Summarize Selected Code
     const handleRequestSummary = () => {
+        // Clear the summary area in PromptPanel before summarizing new code
+        setEditSummaryValue("");
         setLoading(true);
         setError(null);
         setLoadingText("Summarizing...");
@@ -146,7 +158,7 @@ export function NaturalEditContent() {
                 }}>
                     <SummaryDisplay
                         summary={section.summaryData}
-                        onEditSummary={setEditSummaryValue}
+                        onEditSummary={handleEditSummary}
                     />
                     <PromptPanel section={section} editSummaryValue={editSummaryValue} />
                     {validityStatus !== "success" && validityStatus !== "pending" && (

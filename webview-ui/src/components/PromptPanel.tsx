@@ -139,13 +139,11 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     rows={3}
                     disabled={false}
                 />
-                {/* Removed Apply to Summary button */}
                 {error.prompt1 && (
                     <div style={{ color: COLORS.ERROR, marginTop: SPACING.TINY }}>
                         {error.prompt1}
                     </div>
                 )}
-                {/* Removed Apply to Summary error display */}
             </div>
 
             {/* Summary-Mediated Prompt Section */}

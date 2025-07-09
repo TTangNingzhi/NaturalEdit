@@ -19,7 +19,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, onEditSummary 
         <div style={COMMON_STYLES.SECTION_COMPACT}>
             {/* Top row: label left, edit button right */}
             <div style={COMMON_STYLES.SECTION_HEADER}>
-                <span style={COMMON_STYLES.SECTION_LABEL}>Code Summary</span>
+                <span style={COMMON_STYLES.SECTION_LABEL}>Natural Language Summary</span>
                 <button
                     style={COMMON_STYLES.ICON_BUTTON}
                     aria-label="Edit In Prompt"
