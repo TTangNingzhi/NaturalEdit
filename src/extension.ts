@@ -41,6 +41,11 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	// Initialize active text editor
+	if (vscode.window.activeTextEditor) {
+		lastActiveEditor = vscode.window.activeTextEditor;
+	}
+
 	// Listen for changes to the active text editor and update the cache.
 	vscode.window.onDidChangeActiveTextEditor(editor => {
 		if (editor) {
