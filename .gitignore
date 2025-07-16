@@ -4,6 +4,5 @@ node_modules
 .vscode-test/
 *.vsix
 .cursor
-.DS_Store
-**/src-deprecated
+**/.DS_Store
 .specstory/**
