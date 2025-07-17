@@ -17,3 +17,4 @@ vsc-extension-quickstart.md
 webview-ui/
 !webview-ui/dist/**
 .cursor/
+.specstory/
