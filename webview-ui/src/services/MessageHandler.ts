@@ -3,9 +3,6 @@ import { SectionData, SummaryResultMessage } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
 
 /**
- * Handle messages from VSCode
- */
-/**
  * Handle messages from VSCode, including progress updates.
  * @param onError Callback for error messages
  * @param onNewSection Callback for new summary section
@@ -141,14 +138,6 @@ export const sendEditSummary = (
     });
 };
 
-
-/**
- * Create a message handler with state management
- * @param setLoading Loading state setter
- * @param setError Error state setter
- * @param setSectionList Section list state setter
- * @returns A function to setup the message handler
- */
 /**
  * Create a message handler with state management, including progress updates.
  * @param setLoading Loading state setter
