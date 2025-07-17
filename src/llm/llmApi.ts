@@ -177,6 +177,65 @@ ${code}
 }
 
 /**
+ * Get a multi-level summary of modified code, referencing the original code and old summary.
+ * The new summary should be as close as possible to the old summary, only updating parts affected by the code change.
+ * @param newCode The modified code
+ * @param originalCode The original code before modification
+ * @param oldSummary The old summary object: { title, concise, detailed, bullets }
+ * @param fileContext The file context where the code is located
+ * @returns Object containing title, concise, detailed, and bulleted summaries
+ */
+export async function getSummaryWithReference(
+    newCode: string,
+    originalCode: string,
+    oldSummary: { title: string; concise: string; detailed: string; bullets: string[] },
+    fileContext: string
+): Promise<{
+    title: string;
+    concise: string;
+    detailed: string;
+    bullets: string[];
+}> {
+    const prompt = `
+You are an expert code summarizer. Your task is to generate a new summary for the MODIFIED code below, using the original code and its previous summary as reference.
+
+Instructions:
+- The new summary should be as close as possible to the old summary, only updating the parts that are affected by the code change.
+- If a part of the summary is still accurate for the new code, keep it unchanged.
+- If a part of the summary is no longer accurate, update only that part to reflect the new code.
+- Do NOT add unnecessary changes or rephrase unchanged parts.
+- Your summary MUST focus on the code differences between the original and modified code, and clearly reflect those changes in the summary, even if the changes are only in inline comments.
+- If possible, make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update).
+- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
+
+File Context (for reference only):
+${fileContext}
+
+Original code:
+${originalCode}
+
+Old summary:
+{
+  "title": "${oldSummary.title}",
+  "concise": "${oldSummary.concise}",
+  "detailed": "${oldSummary.detailed}",
+  "bullets": ${JSON.stringify(oldSummary.bullets)}
+}
+
+MODIFIED code:
+${newCode}
+`;
+
+    const parsed = await callLLM(prompt, true);
+    return {
+        title: parsed.title || '',
+        concise: parsed.concise || '',
+        detailed: parsed.detailed || '',
+        bullets: Array.isArray(parsed.bullets) ? parsed.bullets : [],
+    };
+}
+
+/**
  * Build summary-to-code mapping for a given summary and code using LLM.
  * Supports multiple, possibly non-contiguous code ranges per summary component.
  * @param code The code to map

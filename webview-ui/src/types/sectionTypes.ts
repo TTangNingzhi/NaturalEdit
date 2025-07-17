@@ -37,15 +37,6 @@ export interface SummaryCodeMapping {
 export type SummaryLevel = "concise" | "detailed" | "bullets";
 
 /**
- * Represents the mapping object for all summary levels.
- */
-export type SummaryMappings = {
-    concise: SummaryCodeMapping[];
-    detailed: SummaryCodeMapping[];
-    bullets: SummaryCodeMapping[];
-};
-
-/**
  * Metadata for a code section.
  * Groups all section-related identifiers and file info.
  */
@@ -78,7 +69,17 @@ export interface SectionData {
     };
 }
 
-// Message from VSCode containing summary data
+/**
+ * Message from VSCode indicating summary progress.
+ */
+export interface SummaryProgressMessage {
+    command: "summaryProgress";
+    stageText?: string;
+}
+
+/**
+ * Message from VSCode containing summary data.
+ */
 export interface SummaryResultMessage {
     command: "summaryResult";
     data?: SummaryData;
@@ -97,4 +98,15 @@ export interface SummaryResultMessage {
     };
     error?: string;
     oldSummaryData?: SummaryData; // Optional: previous summary for diff rendering
+}
+
+/**
+ * Message from VSCode indicating an edit result.
+ */
+export interface EditResultMessage {
+    command: "editResult";
+    action: string;
+    sectionId: string;
+    newCode: string;
+    newCodeRegion?: string;
 }

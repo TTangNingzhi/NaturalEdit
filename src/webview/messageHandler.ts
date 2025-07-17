@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getCodeSummary, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction, buildSummaryMapping } from '../llm/llmApi';
+import { getCodeSummary, getSummaryWithReference, getCodeFromSummaryEdit, getCodeFromDirectInstruction, getSummaryFromInstruction, buildSummaryMapping } from '../llm/llmApi';
 import { getLastActiveEditor } from '../extension';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -332,8 +332,12 @@ async function handleGetSummary(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
+    console.log(message);
+    // If present, use oldSummaryData from the message (for post-edit summary workflow)
+    const oldSummaryData = message.oldSummaryData || undefined;
+    // Use newCode from message if present, otherwise use current selection
     const editor = getLastActiveEditor();
-    const selectedText = editor?.document.getText(editor.selection) || '';
+    const selectedText = message.newCode || (editor?.document.getText(editor.selection) || '');
 
     if (!selectedText) {
         webviewContainer.webview.postMessage({
@@ -352,7 +356,17 @@ async function handleGetSummary(
         });
         const filePath = editor?.document.fileName || '';
         const fileContext = await generateFileContext(filePath);
-        const summary = await getCodeSummary(selectedText, fileContext);
+
+        // Use getSummaryWithReference if oldSummaryData is present, otherwise use getCodeSummary
+        let summary;
+        if (oldSummaryData && oldSummaryData.title && oldSummaryData.concise && oldSummaryData.detailed && Array.isArray(oldSummaryData.bullets)) {
+            // Use originalCode from oldSummaryData context if available, else fallback to selectedText
+            const originalCode = oldSummaryData.originalCode || selectedText;
+            summary = await getSummaryWithReference(selectedText, originalCode, oldSummaryData, fileContext);
+        } else {
+            summary = await getCodeSummary(selectedText, fileContext);
+        }
+
         const filename = editor ? path.basename(editor.document.fileName) : '';
         const fullPath = editor?.document.fileName || '';
         const lines = editor ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}` : '';
@@ -400,7 +414,9 @@ async function handleGetSummary(
                 concise: conciseMappings,
                 detailed: detailedMappings,
                 bullets: bulletsMappings
-            }
+            },
+            // Pass oldSummaryData if present (for diffed rendering in frontend)
+            ...(oldSummaryData ? { oldSummaryData } : {})
         });
     } catch (err: any) {
         webviewContainer.webview.postMessage({
@@ -643,12 +659,32 @@ async function applyCodeChanges(
 
         // Optionally, focus the diff editor (VSCode will usually do this automatically)
 
-        // --- Notify frontend as before ---
+        // --- After patch, find the actual new code region in the file and notify frontend ---
+        const patchedText = result.patchedText || "";
+        let newCodeRegion = patchedText;
+        try {
+            const updatedDocument = await vscode.workspace.openTextDocument(fileUri);
+            const updatedText = updatedDocument.getText();
+            // Fuzzy match to find the region in the file
+            let matchLoc = -1;
+            try {
+                const dmp = new DiffMatchPatch();
+                matchLoc = dmp.match_main(updatedText, patchedText, 0);
+            } catch (e) {
+                matchLoc = updatedText.indexOf(patchedText);
+            }
+            if (matchLoc !== -1) {
+                newCodeRegion = updatedText.slice(matchLoc, matchLoc + patchedText.length);
+            }
+        } catch (e) {
+            // Fallback: use patchedText as newCodeRegion
+        }
         webviewContainer.webview.postMessage({
             command: 'editResult',
             sectionId: message.sectionId,
             action,
-            newCode: result.patchedText
+            newCode: patchedText,
+            newCodeRegion
         });
     } catch (error) {
         console.error('Error applying code changes:', error);
