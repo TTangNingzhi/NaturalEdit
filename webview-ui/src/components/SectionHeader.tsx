@@ -161,7 +161,9 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     fontSize: FONT_SIZE.SMALL,
                     marginTop: 0
                 }}>
-                    {concise}
+                    {section.oldSummaryData
+                        ? renderDiffedText(section.oldSummaryData.concise, concise)
+                        : concise}
                 </div>
             )}
         </div>

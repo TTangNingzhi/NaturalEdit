@@ -56,149 +56,142 @@ export function renderDiffedTextWithMapping(
   activeMappingIndex?: number | null,
   onMappingHover?: (index: number | null) => void
 ): React.ReactNode {
+  // --- Step 1: Compute diff regions in newText ---
+  // Each region: { start, end, type: "equal" | "insert" }
   const dmp = new DiffMatchPatch();
   const diffs = dmp.diff_main(oldText || "", newText || "");
   dmp.diff_cleanupSemantic(diffs);
 
-  // Helper to apply mapping highlights to a text segment
-  function renderWithMapping(
-    text: string,
-    mappings: SummaryCodeMapping[],
-    colorOverride?: React.CSSProperties
-  ): React.ReactNode[] {
-    if (!mappings || mappings.length === 0 || !text) {
-      return [<span style={colorOverride} key="plain">{text}</span>];
-    }
-
-    const used: Array<[number, number]> = [];
-    const elements: React.ReactNode[] = [];
-    let cursor = 0;
-
-    // Checks if a range overlaps with any used range
-    const isOverlapping = (start: number, end: number) =>
-      used.some(([uStart, uEnd]) => !(end <= uStart || start >= uEnd));
-
-    // Finds the best match for a component in the text
-    const findBestMatch = (comp: string, searchStart: number): [number, number] | null => {
-      const BITAP_LIMIT = 32; // limit for fuzzy match
-
-      // 1. Try exact match (case-sensitive)
-      let matchIdx = text.indexOf(comp, searchStart);
-      if (matchIdx !== -1) {
-        return [matchIdx, matchIdx + comp.length];
-      }
-
-      // 2. Try exact match (case-insensitive)
-      matchIdx = text.toLowerCase().indexOf(comp.toLowerCase(), searchStart);
-      if (matchIdx !== -1) {
-        return [matchIdx, matchIdx + comp.length];
-      }
-
-      // 3. Try fuzzy match if pattern is short enough
-      if (comp.length <= BITAP_LIMIT) {
-        try {
-          matchIdx = dmp.match_main(text.toLowerCase(), comp.toLowerCase(), searchStart);
-          if (matchIdx !== -1) {
-            return [matchIdx, matchIdx + comp.length];
-          }
-        } catch {
-          // If fuzzy match fails, skip to next position
-          return null;
-        }
-      }
-
-      return null;
-    };
-
-    // Process each mapping
-    mappings.forEach((mapping: SummaryCodeMapping, localIdx: number) => {
-      const comp = mapping.summaryComponent;
-      if (!comp) return;
-
-      let searchStart = 0;
-      while (searchStart < text.length) {
-        const match = findBestMatch(comp, searchStart);
-        if (!match) break;
-
-        const [matchIdx, matchEnd] = match;
-        if (!isOverlapping(matchIdx, matchEnd)) {
-          // Found a non-overlapping match
-          used.push([matchIdx, matchEnd]);
-
-          // Add text before the match
-          if (cursor < matchIdx) {
-            elements.push(
-              <span key={`plain-${localIdx}-${cursor}`} style={colorOverride}>
-                {text.slice(cursor, matchIdx)}
-              </span>
-            );
-          }
-
-          // Add the highlighted match
-          elements.push(
-            <span
-              key={`map-${localIdx}-${matchIdx}`}
-              style={{
-                background: SUMMARY_CODE_MAPPING_COLORS[localIdx % SUMMARY_CODE_MAPPING_COLORS.length] +
-                  (activeMappingIndex === localIdx ? "CC" : "40"),
-                borderRadius: BORDER_RADIUS.SMALL,
-                padding: "0 2px",
-                margin: "0 1px",
-                cursor: "pointer",
-                transition: "background 0.15s",
-                ...colorOverride
-              }}
-              onMouseEnter={() => onMappingHover && onMappingHover(localIdx)}
-              onMouseLeave={() => onMappingHover && onMappingHover(null)}
-            >
-              {text.slice(matchIdx, matchEnd)}
-            </span>
-          );
-
-          cursor = matchEnd;
-          return;
-        }
-
-        // If overlapping, continue searching
-        searchStart = matchIdx + 1;
-      }
+  // Build diff regions: each with start, end, type
+  type DiffRegion = { start: number; end: number; type: "equal" | "insert" };
+  const diffRegions: DiffRegion[] = [];
+  let cursor = 0;
+  for (const [op, data] of diffs as [number, string][]) {
+    if (op === DiffMatchPatch.DIFF_DELETE) continue; // Deleted text is omitted
+    const len = data.length;
+    diffRegions.push({
+      start: cursor,
+      end: cursor + len,
+      type: op === DiffMatchPatch.DIFF_INSERT ? "insert" : "equal",
     });
-
-    // Add remaining text
-    if (cursor < text.length) {
-      elements.push(
-        <span key="plain-end" style={colorOverride}>{text.slice(cursor)}</span>
-      );
-    }
-
-    return elements;
+    cursor += len;
   }
 
-  // Compose the final output by processing each diff segment
+  // --- Step 2: Compute mapping regions in newText ---
+  // Each region: { start, end, mappingIndex }
+  type MappingRegion = { start: number; end: number; mappingIndex: number };
+  const mappingRegions: MappingRegion[] = [];
+  if (mappings && mappings.length > 0 && newText) {
+    // For each mapping, find all non-overlapping matches in newText
+    const used: Array<[number, number]> = [];
+    const isOverlapping = (start: number, end: number) =>
+      used.some(([uStart, uEnd]) => !(end <= uStart || start >= uEnd));
+    for (let i = 0; i < mappings.length; ++i) {
+      const comp = mappings[i].summaryComponent;
+      if (!comp) continue;
+      let searchStart = 0;
+      while (searchStart < newText.length) {
+        // Try exact match (case-sensitive)
+        let matchIdx = newText.indexOf(comp, searchStart);
+        if (matchIdx === -1) {
+          // Try exact match (case-insensitive)
+          matchIdx = newText.toLowerCase().indexOf(comp.toLowerCase(), searchStart);
+        }
+        if (matchIdx === -1) break;
+        const matchEnd = matchIdx + comp.length;
+        if (!isOverlapping(matchIdx, matchEnd)) {
+          mappingRegions.push({ start: matchIdx, end: matchEnd, mappingIndex: i });
+          used.push([matchIdx, matchEnd]);
+          searchStart = matchEnd;
+        } else {
+          searchStart = matchIdx + 1;
+        }
+      }
+    }
+    // Sort mapping regions by start index
+    mappingRegions.sort((a, b) => a.start - b.start);
+  }
+
+  // --- Step 3: Merge mapping and diff regions into minimal non-overlapping segments ---
+  // Each segment: { start, end, mappingIndex: number|null, diffType: "equal"|"insert" }
+  type Segment = { start: number; end: number; mappingIndex: number | null; diffType: "equal" | "insert" };
+
+  // Collect all split points (start/end of mapping and diff regions)
+  const splitPoints = new Set<number>();
+  diffRegions.forEach(r => { splitPoints.add(r.start); splitPoints.add(r.end); });
+  mappingRegions.forEach(r => { splitPoints.add(r.start); splitPoints.add(r.end); });
+  splitPoints.add(0);
+  splitPoints.add(newText.length);
+  const sortedPoints = Array.from(splitPoints).sort((a, b) => a - b);
+
+  // For each segment between split points, determine mappingIndex and diffType
+  const segments: Segment[] = [];
+  for (let i = 0; i < sortedPoints.length - 1; ++i) {
+    const segStart = sortedPoints[i];
+    const segEnd = sortedPoints[i + 1];
+    if (segStart >= segEnd) continue;
+    // Find mappingIndex (if any)
+    let mappingIndex: number | null = null;
+    for (const m of mappingRegions) {
+      if (segStart >= m.start && segEnd <= m.end) {
+        mappingIndex = m.mappingIndex;
+        break;
+      }
+    }
+    // Find diffType
+    let diffType: "equal" | "insert" = "equal";
+    for (const d of diffRegions) {
+      if (segStart >= d.start && segEnd <= d.end) {
+        diffType = d.type;
+        break;
+      }
+    }
+    segments.push({ start: segStart, end: segEnd, mappingIndex, diffType });
+  }
+
+  // --- Step 4: Render segments ---
   const output: React.ReactNode[] = [];
-  let idx = 0;
-  diffs.forEach(([op, data]: [number, string]) => {
-    if (op === DiffMatchPatch.DIFF_INSERT) {
-      // Inserted text: render in red, but still apply mapping highlights
+  for (let i = 0; i < segments.length; ++i) {
+    const { start, end, mappingIndex, diffType } = segments[i];
+    const text = newText.slice(start, end);
+    if (!text) continue;
+
+    // Build style for mapping highlight (if any)
+    const style: React.CSSProperties = {};
+    if (mappingIndex !== null) {
+      style.background =
+        SUMMARY_CODE_MAPPING_COLORS[mappingIndex % SUMMARY_CODE_MAPPING_COLORS.length] +
+        (activeMappingIndex === mappingIndex ? "CC" : "40");
+      style.borderRadius = BORDER_RADIUS.SMALL;
+      style.padding = "0 2px";
+      style.margin = "0 1px";
+      style.cursor = "pointer";
+      style.transition = "background 0.15s";
+    }
+    if (diffType === "insert") {
+      style.color = "red";
+    }
+
+    // Render with mapping highlight and/or diff coloring
+    if (mappingIndex !== null) {
       output.push(
-        ...renderWithMapping(
-          data,
-          mappings,
-          { color: "red" }
-        ).map((el, i) => React.cloneElement(el as React.ReactElement, { key: `ins-${idx}-${i}` }))
+        <span
+          key={`map-${i}`}
+          style={style}
+          onMouseEnter={() => onMappingHover && onMappingHover(mappingIndex)}
+          onMouseLeave={() => onMappingHover && onMappingHover(null)}
+        >
+          {text}
+        </span>
       );
-    } else if (op === DiffMatchPatch.DIFF_EQUAL) {
-      // Unchanged text: render normally, but still apply mapping highlights
+    } else {
       output.push(
-        ...renderWithMapping(
-          data,
-          mappings
-        ).map((el, i) => React.cloneElement(el as React.ReactElement, { key: `eq-${idx}-${i}` }))
+        <span key={`plain-${i}`} style={style}>
+          {text}
+        </span>
       );
     }
-    // Deleted text is omitted
-    idx++;
-  });
+  }
 
   return <>{output}</>;
 }

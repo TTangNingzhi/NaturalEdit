@@ -683,32 +683,13 @@ async function applyCodeChanges(
 
         // Optionally, focus the diff editor (VSCode will usually do this automatically)
 
-        // --- After patch, find the actual new code region in the file and notify frontend ---
+        // --- After patch, notify frontend with the new code ---
         const patchedText = result.patchedText || "";
-        let newCodeRegion = patchedText;
-        try {
-            const updatedDocument = await vscode.workspace.openTextDocument(fileUri);
-            const updatedText = updatedDocument.getText();
-            // Fuzzy match to find the region in the file
-            let matchLoc = -1;
-            try {
-                const dmp = new DiffMatchPatch();
-                matchLoc = dmp.match_main(updatedText, patchedText, 0);
-            } catch (e) {
-                matchLoc = updatedText.indexOf(patchedText);
-            }
-            if (matchLoc !== -1) {
-                newCodeRegion = updatedText.slice(matchLoc, matchLoc + patchedText.length);
-            }
-        } catch (e) {
-            // Fallback: use patchedText as newCodeRegion
-        }
         webviewContainer.webview.postMessage({
             command: 'editResult',
             sectionId: message.sectionId,
             action,
-            newCode: patchedText,
-            newCodeRegion
+            newCode: patchedText
         });
     } catch (error) {
         console.error('Error applying code changes:', error);
