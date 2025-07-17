@@ -369,7 +369,30 @@ async function handleGetSummary(
 
         const filename = editor ? path.basename(editor.document.fileName) : '';
         const fullPath = editor?.document.fileName || '';
-        const lines = editor ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}` : '';
+        // const lines = editor ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}` : '';
+
+        // Determine lines and offset based on whether newCode is used
+        let lines = '';
+        let offset = 0;
+        if (message.newCode && editor) {
+            // If newCode is present, find its position in the file and use that for lines and offset
+            const docText = editor.document.getText();
+            const match = findBestMatch(docText, message.newCode);
+            if (match.location !== -1) {
+                const startPos = editor.document.positionAt(match.location);
+                const endPos = editor.document.positionAt(match.location + message.newCode.length);
+                lines = `${startPos.line + 1}-${endPos.line + 1}`;
+                offset = match.location;
+            } else {
+                // Fallback to selection if not found
+                lines = `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}`;
+                offset = editor.document.offsetAt(editor.selection.start);
+            }
+        } else if (editor) {
+            // Use the editor selection as before
+            lines = `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}`;
+            offset = editor.document.offsetAt(editor.selection.start);
+        }
 
         // Stage 2: Mapping concise summary
         webviewContainer.webview.postMessage({
@@ -409,7 +432,8 @@ async function handleGetSummary(
             concise: summary.concise,
             createdAt: new Date().toLocaleString(),
             originalCode: selectedText,
-            offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
+            // offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
+            offset,
             summaryMappings: {
                 concise: conciseMappings,
                 detailed: detailedMappings,
