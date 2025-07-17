@@ -108,5 +108,4 @@ export interface EditResultMessage {
     action: string;
     sectionId: string;
     newCode: string;
-    newCodeRegion?: string;
 }

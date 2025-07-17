@@ -19,7 +19,7 @@ import { v4 as uuidv4 } from "uuid";
 export const setupMessageHandler = (
     onError: (error: string) => void,
     onNewSection: (section: SectionData) => void,
-    onEditResult?: (sectionId: string, action: string, newCode: string, newCodeRegion?: string) => void,
+    onEditResult?: (sectionId: string, action: string, newCode: string) => void,
     onProgress?: (stageText: string) => void,
     getOldSummaryData?: (sectionId: string) => SummaryData | undefined
 ) => {
@@ -91,27 +91,22 @@ export const setupMessageHandler = (
                     onEditResult(
                         msg.sectionId,
                         msg.action,
-                        msg.newCode,
-                        typeof msg.newCodeRegion === "string" ? msg.newCodeRegion : undefined
+                        msg.newCode
                     );
                     // After an edit (e.g., summaryPrompt or directPrompt), trigger a new summary for the modified code
                     if (
                         (msg.action === "summaryPrompt" || msg.action === "directPrompt") &&
-                        (typeof msg.newCode === "string" || typeof msg.newCodeRegion === "string") &&
+                        typeof msg.newCode === "string" &&
                         typeof getOldSummaryData === "function"
                     ) {
                         // Use getOldSummaryData to retrieve the previous summary for diff rendering
                         const oldSummaryData = getOldSummaryData(msg.sectionId);
-                        const codeToSummarize =
-                            typeof msg.newCodeRegion === "string" && msg.newCodeRegion.length > 0
-                                ? msg.newCodeRegion
-                                : msg.newCode;
                         // Set initial loading/progress text before requesting summary
                         if (onProgress) {
                             onProgress("Summarizing modified code...");
                         }
                         requestSummary(
-                            typeof codeToSummarize === "string" ? codeToSummarize : "",
+                            msg.newCode,
                             oldSummaryData &&
                                 typeof oldSummaryData.title === "string" &&
                                 typeof oldSummaryData.concise === "string" &&
