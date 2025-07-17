@@ -4,7 +4,7 @@
 import React from "react";
 import DiffMatchPatch from "diff-match-patch";
 import { SummaryCodeMapping } from "../types/sectionTypes";
-import { SUMMARY_CODE_MAPPING_COLORS, BORDER_RADIUS } from "../styles/constants";
+import { SUMMARY_CODE_MAPPING_COLORS, BORDER_RADIUS, COLORS } from "../styles/constants";
 
 /**
  * Renders the diff between oldText and newText.
@@ -26,7 +26,7 @@ export function renderDiffedText(oldText: string, newText: string): React.ReactN
     <>
       {diffs.map(([op, data]: [number, string], idx: number) =>
         op === DiffMatchPatch.DIFF_INSERT ? (
-          <span key={idx} style={{ color: "red" }}>{data}</span>
+          <span key={idx} style={{ color: COLORS.TEXT_DIFF }}>{data}</span>
         ) : op === DiffMatchPatch.DIFF_DELETE ? null : (
           <span key={idx}>{data}</span>
         )
@@ -112,84 +112,78 @@ export function renderDiffedTextWithMapping(
     mappingRegions.sort((a, b) => a.start - b.start);
   }
 
-  // --- Step 3: Merge mapping and diff regions into minimal non-overlapping segments ---
-  // Each segment: { start, end, mappingIndex: number|null, diffType: "equal"|"insert" }
-  type Segment = { start: number; end: number; mappingIndex: number | null; diffType: "equal" | "insert" };
+  // --- Step 3: Render output with unbroken mapping highlights ---
+  const output: React.ReactNode[] = [];
+  let pos = 0;
 
-  // Collect all split points (start/end of mapping and diff regions)
-  const splitPoints = new Set<number>();
-  diffRegions.forEach(r => { splitPoints.add(r.start); splitPoints.add(r.end); });
-  mappingRegions.forEach(r => { splitPoints.add(r.start); splitPoints.add(r.end); });
-  splitPoints.add(0);
-  splitPoints.add(newText.length);
-  const sortedPoints = Array.from(splitPoints).sort((a, b) => a - b);
-
-  // For each segment between split points, determine mappingIndex and diffType
-  const segments: Segment[] = [];
-  for (let i = 0; i < sortedPoints.length - 1; ++i) {
-    const segStart = sortedPoints[i];
-    const segEnd = sortedPoints[i + 1];
-    if (segStart >= segEnd) continue;
-    // Find mappingIndex (if any)
-    let mappingIndex: number | null = null;
-    for (const m of mappingRegions) {
-      if (segStart >= m.start && segEnd <= m.end) {
-        mappingIndex = m.mappingIndex;
-        break;
+  // Helper: render a substring with diff coloring, given a range [start, end)
+  function renderDiffColored(start: number, end: number, keyPrefix: string) {
+    const nodes: React.ReactNode[] = [];
+    let idx = 0;
+    for (const region of diffRegions) {
+      if (region.end <= start) continue;
+      if (region.start >= end) break;
+      const segStart = Math.max(region.start, start);
+      const segEnd = Math.min(region.end, end);
+      if (segStart >= segEnd) continue;
+      const text = newText.slice(segStart, segEnd);
+      if (!text) continue;
+      if (region.type === "insert") {
+        nodes.push(
+          <span key={`${keyPrefix}-ins-${idx}`} style={{ color: COLORS.TEXT_DIFF }}>
+            {text}
+          </span>
+        );
+      } else {
+        nodes.push(
+          <span key={`${keyPrefix}-eq-${idx}`}>{text}</span>
+        );
       }
+      idx++;
     }
-    // Find diffType
-    let diffType: "equal" | "insert" = "equal";
-    for (const d of diffRegions) {
-      if (segStart >= d.start && segEnd <= d.end) {
-        diffType = d.type;
-        break;
-      }
-    }
-    segments.push({ start: segStart, end: segEnd, mappingIndex, diffType });
+    return nodes;
   }
 
-  // --- Step 4: Render segments ---
-  const output: React.ReactNode[] = [];
-  for (let i = 0; i < segments.length; ++i) {
-    const { start, end, mappingIndex, diffType } = segments[i];
-    const text = newText.slice(start, end);
-    if (!text) continue;
+  // Merge mapping and non-mapping regions, and render accordingly
+  let mappingIdx = 0;
+  while (pos < newText.length) {
+    // Find the next mapping region that starts at or after pos
+    const nextMapping = mappingRegions[mappingIdx] && mappingRegions[mappingIdx].start >= pos
+      ? mappingRegions[mappingIdx]
+      : mappingRegions.find(m => m.start >= pos);
 
-    // Build style for mapping highlight (if any)
-    const style: React.CSSProperties = {};
-    if (mappingIndex !== null) {
-      style.background =
-        SUMMARY_CODE_MAPPING_COLORS[mappingIndex % SUMMARY_CODE_MAPPING_COLORS.length] +
-        (activeMappingIndex === mappingIndex ? "CC" : "40");
-      style.borderRadius = BORDER_RADIUS.SMALL;
-      style.padding = "0 2px";
-      style.margin = "0 1px";
-      style.cursor = "pointer";
-      style.transition = "background 0.15s";
-    }
-    if (diffType === "insert") {
-      style.color = "red";
-    }
-
-    // Render with mapping highlight and/or diff coloring
-    if (mappingIndex !== null) {
+    if (nextMapping && nextMapping.start === pos) {
+      // Render mapping region as a single highlight span, with nested diff coloring
+      const { start, end, mappingIndex } = nextMapping;
+      const style: React.CSSProperties = {
+        background:
+          SUMMARY_CODE_MAPPING_COLORS[mappingIndex % SUMMARY_CODE_MAPPING_COLORS.length] +
+          (activeMappingIndex === mappingIndex ? "CC" : "40"),
+        borderRadius: BORDER_RADIUS.SMALL,
+        padding: "0 2px",
+        margin: "0 1px",
+        cursor: "pointer",
+        transition: "background 0.15s",
+      };
       output.push(
         <span
-          key={`map-${i}`}
+          key={`map-${mappingIndex}-${start}`}
           style={style}
           onMouseEnter={() => onMappingHover && onMappingHover(mappingIndex)}
           onMouseLeave={() => onMappingHover && onMappingHover(null)}
         >
-          {text}
+          {renderDiffColored(start, end, `map-${mappingIndex}-${start}`)}
         </span>
       );
+      pos = end;
+      mappingIdx = mappingRegions.findIndex(m => m.start > pos) !== -1
+        ? mappingRegions.findIndex(m => m.start > pos)
+        : mappingRegions.length;
     } else {
-      output.push(
-        <span key={`plain-${i}`} style={style}>
-          {text}
-        </span>
-      );
+      // Render non-mapping region (from pos to next mapping or end)
+      const nextStart = nextMapping ? nextMapping.start : newText.length;
+      output.push(...renderDiffColored(pos, nextStart, `plain-${pos}`));
+      pos = nextStart;
     }
   }
 

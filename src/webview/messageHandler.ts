@@ -9,13 +9,13 @@ import DiffMatchPatch from 'diff-match-patch';
 
 // Color palette for summary-code mapping highlights (must match frontend)
 const SUMMARY_CODE_MAPPING_COLORS = [
-    "#A3D3FF", // blue
     "#FFB3C6", // pink
     "#B9FBC0", // green
     "#FFD6A5", // orange
     "#D0BFFF", // purple
+    "#A3D3FF", // blue
+    "#FFDAC1",  // peach
     "#FFFACD", // yellow
-    "#FFDAC1"  // peach
 ];
 
 // Constants for code matching
