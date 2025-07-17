@@ -123,9 +123,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                 selectedLevel={selectedLevel}
                 onLevelChange={onLevelChange}
                 onEditPrompt={onEditPrompt}
-                summaryCodeMappings={rawMappings}
+                summaryMappings={summaryMappings}
                 activeMappingIndex={activeMappingIndex}
                 onMappingHover={handleMappingHover}
+                oldSummaryData={section.oldSummaryData}
             />
             <PromptPanel section={section} />
 

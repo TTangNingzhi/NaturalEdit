@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { getFileIcon } from "../utils/fileIcons.js";
 import { FONT_SIZE, COLORS, SPACING, COMMON_STYLES } from "../styles/constants.js";
 import { SectionData } from "../types/sectionTypes.js";
+import { renderDiffedText } from "../utils/diffRender";
 
 interface SectionHeaderProps {
     section: SectionData;
@@ -124,7 +125,11 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     color: COLORS.FOREGROUND
                 }}
             >
-                <span>{title || "Untitled"}</span>
+                <span>
+                    {section.oldSummaryData
+                        ? renderDiffedText(section.oldSummaryData.title, title)
+                        : (title || "Untitled")}
+                </span>
                 {/* Only show delete button when header is hovered and section is expanded */}
                 {!collapsed && headerHovered && (
                     <button

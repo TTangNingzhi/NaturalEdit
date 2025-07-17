@@ -37,6 +37,15 @@ export interface SummaryCodeMapping {
 export type SummaryLevel = "concise" | "detailed" | "bullets";
 
 /**
+ * Represents the mapping object for all summary levels.
+ */
+export type SummaryMappings = {
+    concise: SummaryCodeMapping[];
+    detailed: SummaryCodeMapping[];
+    bullets: SummaryCodeMapping[];
+};
+
+/**
  * Metadata for a code section.
  * Groups all section-related identifiers and file info.
  */
@@ -58,6 +67,7 @@ export interface SectionData {
     concise: string;
     createdAt: number;
     summaryData: SummaryData;
+    oldSummaryData?: SummaryData; // If present, stores the previous summary data for diffed rendering.
     selectedLevel: SummaryLevel;
     editPromptLevel: SummaryLevel | null;
     editPromptValue: string;
@@ -70,20 +80,21 @@ export interface SectionData {
 
 // Message from VSCode containing summary data
 export interface SummaryResultMessage {
-    command: string;
-    error?: string;
+    command: "summaryResult";
     data?: SummaryData;
     filename?: string;
+    fullPath?: string;
     lines?: string;
     title?: string;
     concise?: string;
     createdAt?: string;
     originalCode?: string;
-    fullPath?: string;
     offset?: number;
     summaryMappings?: {
         concise: SummaryCodeMapping[];
         detailed: SummaryCodeMapping[];
         bullets: SummaryCodeMapping[];
     };
+    error?: string;
+    oldSummaryData?: SummaryData; // Optional: previous summary for diff rendering
 }

@@ -1,10 +1,7 @@
 import { vscodeApi } from "../utils/vscodeApi";
-import { SectionData, SummaryResultMessage } from "../types/sectionTypes.js";
+import { SectionData, SummaryData, SummaryMappings } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
 
-/**
- * Handle messages from VSCode
- */
 /**
  * Handle messages from VSCode, including progress updates.
  * @param onError Callback for error messages
@@ -15,59 +12,83 @@ import { v4 as uuidv4 } from "uuid";
 export const setupMessageHandler = (
     onError: (error: string) => void,
     onNewSection: (section: SectionData) => void,
-    onEditResult?: (sectionId: string, action: string, newCode: string) => void,
+    onEditResult?: (sectionId: string, action: string, newCode: string, newCodeRegion?: string) => void,
     onProgress?: (stageText: string) => void
 ) => {
-    interface ProgressMessage {
-        command: "summaryProgress";
-        stageText: string;
-    }
-
     const handleMessage = (message: unknown) => {
+        const msgObj = message as Record<string, unknown>;
         if (
-            typeof message === "object" &&
-            message !== null
+            typeof msgObj === "object" &&
+            msgObj !== null
         ) {
             // Handle summary progress updates
-            if ("command" in message && message.command === "summaryProgress" && onProgress) {
+            if ("command" in msgObj && msgObj.command === "summaryProgress" && onProgress) {
                 // Call the progress callback with the current stage text
-                onProgress((message as ProgressMessage).stageText || "Summarizing...");
-            } else if ("command" in message && message.command === "summaryResult") {
-                const msg = message as SummaryResultMessage;
-                if (msg.error) {
-                    onError(msg.error);
-                } else if (msg.data) {
+                const stageText = typeof msgObj["stageText"] === "string" ? msgObj["stageText"] : "Summarizing...";
+                onProgress(stageText);
+            } else if ("command" in msgObj && msgObj.command === "summaryResult") {
+                if (msgObj["error"]) {
+                    onError(msgObj["error"] as string);
+                } else if (msgObj["data"]) {
                     const id = uuidv4();
                     onNewSection({
                         metadata: {
                             id,
-                            filename: msg.filename || "unknown",
-                            fullPath: msg.fullPath || "",
-                            offset: typeof msg.offset === "number" ? msg.offset : 0,
-                            originalCode: msg.originalCode || ""
+                            filename: msgObj["filename"] as string || "unknown",
+                            fullPath: msgObj["fullPath"] as string || "",
+                            offset: typeof msgObj["offset"] === "number" ? (msgObj["offset"] as number) : 0,
+                            originalCode: msgObj["originalCode"] as string || ""
                         },
-                        lines: [parseInt(msg.lines?.split('-')[0] || '0'), parseInt(msg.lines?.split('-')[1] || '0')],
-                        title: msg.title || "Untitled",
-                        concise: msg.concise || "",
-                        createdAt: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
-                        summaryData: msg.data,
+                        lines: (() => {
+                            const linesStr = typeof msgObj["lines"] === "string" ? msgObj["lines"] : "0-0";
+                            const [start, end] = linesStr.split("-").map(s => parseInt(s || "0"));
+                            return [start || 0, end || 0];
+                        })(),
+                        title: msgObj["title"] as string || "Untitled",
+                        concise: msgObj["concise"] as string || "",
+                        createdAt: msgObj["createdAt"] ? new Date(msgObj["createdAt"] as string).getTime() : Date.now(),
+                        summaryData: msgObj["data"] as SummaryData,
                         selectedLevel: "concise",
                         editPromptLevel: null,
                         editPromptValue: "",
-                        summaryMappings: msg.summaryMappings || { concise: [], detailed: [], bullets: [] }
+                        summaryMappings: (typeof msgObj["summaryMappings"] === "object" &&
+                            msgObj["summaryMappings"] !== null &&
+                            "concise" in (msgObj["summaryMappings"] as object) &&
+                            "detailed" in (msgObj["summaryMappings"] as object) &&
+                            "bullets" in (msgObj["summaryMappings"] as object)
+                        )
+                            ? (msgObj["summaryMappings"] as SummaryMappings)
+                            : { concise: [], detailed: [], bullets: [] },
+                        // Pass oldSummaryData for diff rendering if present and valid
+                        ...(
+                            msgObj["oldSummaryData"] &&
+                                typeof msgObj["oldSummaryData"] === "object" &&
+                                msgObj["oldSummaryData"] !== null &&
+                                "title" in (msgObj["oldSummaryData"] as object) &&
+                                "concise" in (msgObj["oldSummaryData"] as object) &&
+                                "detailed" in (msgObj["oldSummaryData"] as object) &&
+                                "bullets" in (msgObj["oldSummaryData"] as object)
+                                ? { oldSummaryData: msgObj["oldSummaryData"] as SummaryData }
+                                : {}
+                        )
                     });
                 }
-            } else if ("command" in message && message.command === "editResult" && onEditResult) {
-                // Handle backend edit result (e.g., promptToSummary)
+            } else if ("command" in msgObj && msgObj.command === "editResult" && onEditResult) {
+                // Handle backend edit result (e.g., promptToSummary, summaryPrompt, directPrompt)
                 if (
-                    "action" in message &&
-                    message.action === "promptToSummary" &&
-                    "sectionId" in message &&
-                    typeof message.sectionId === "string" &&
-                    "newCode" in message &&
-                    typeof message.newCode === "string"
+                    "action" in msgObj &&
+                    "sectionId" in msgObj &&
+                    typeof msgObj.sectionId === "string" &&
+                    "newCode" in msgObj &&
+                    typeof msgObj.newCode === "string"
                 ) {
-                    onEditResult(message.sectionId, message.action, message.newCode);
+                    // Always pass newCodeRegion if present
+                    onEditResult(
+                        msgObj.sectionId as string,
+                        msgObj.action as string,
+                        msgObj.newCode as string,
+                        "newCodeRegion" in msgObj && typeof msgObj.newCodeRegion === "string" ? msgObj.newCodeRegion : undefined
+                    );
                 }
             }
         }
@@ -77,10 +98,22 @@ export const setupMessageHandler = (
 };
 
 /**
- * Request summary from VSCode
+ * Request summary from VSCode, optionally with oldSummaryData for diffed rendering.
+ * @param oldSummaryData Optional previous summary data to pass for diff rendering
  */
-export const requestSummary = () => {
-    vscodeApi.postMessage({ command: "getSummary" });
+/**
+ * Request summary from VSCode, optionally with newCode and oldSummaryData for diffed rendering.
+ * @param newCode The new code to summarize (optional)
+ * @param oldSummaryData Optional previous summary data to pass for diff rendering
+ */
+export const requestSummary = (newCode?: string, oldSummaryData?: SummaryData) => {
+    if (newCode && oldSummaryData) {
+        vscodeApi.postMessage({ command: "getSummary", newCode, oldSummaryData });
+    } else if (oldSummaryData) {
+        vscodeApi.postMessage({ command: "getSummary", oldSummaryData });
+    } else {
+        vscodeApi.postMessage({ command: "getSummary" });
+    }
 };
 
 /**
@@ -180,13 +213,6 @@ export const sendPromptToSummary = (
 };
 
 /**
- * Create a message handler with state management
- * @param setLoading Loading state setter
- * @param setError Error state setter
- * @param setSectionList Section list state setter
- * @returns A function to setup the message handler
- */
-/**
  * Create a message handler with state management, including progress updates.
  * @param setLoading Loading state setter
  * @param setError Error state setter
@@ -209,7 +235,7 @@ export const createStatefulMessageHandler = (
             setLoading(false);
             setSectionList(prev => [...prev, section]);
         },
-        (sectionId, action, newCode) => {
+        (sectionId, action, newCode, newCodeRegion) => {
             if (action === "promptToSummary") {
                 setSectionList(prev =>
                     prev.map(s =>
@@ -218,6 +244,50 @@ export const createStatefulMessageHandler = (
                             : s
                     )
                 );
+            }
+            // After an edit (e.g., summaryPrompt or directPrompt), trigger a new summary for the modified code
+            if ((action === "summaryPrompt" || action === "directPrompt") && (typeof newCode === "string" || typeof newCodeRegion === "string")) {
+                setLoading(true);
+                setError(null);
+                setLoadingText?.("Summarizing modified code...");
+                // Find the previous section by sectionId from the current section list
+                let oldSummaryData: {
+                    title: string;
+                    concise: string;
+                    detailed: string;
+                    bullets: string[];
+                    originalCode: string;
+                } | undefined = undefined;
+                setSectionList(prev => {
+                    const prevSection = prev.find(s => s.metadata.id === sectionId);
+                    if (prevSection) {
+                        oldSummaryData = {
+                            title: prevSection.title,
+                            concise: prevSection.summaryData.concise,
+                            detailed: prevSection.summaryData.detailed,
+                            bullets: prevSection.summaryData.bullets,
+                            originalCode: prevSection.metadata.originalCode
+                        };
+                        // Call requestSummary after state update
+                        setTimeout(() => {
+                            const codeToSummarize = typeof newCodeRegion === "string" && newCodeRegion.length > 0 ? newCodeRegion : newCode;
+                            console.log(
+                                "[MessageHandler] Triggering getSummary after editResult:",
+                                { codeToSummarize, oldSummaryData }
+                            );
+                            requestSummary(
+                                typeof codeToSummarize === "string" ? codeToSummarize : "",
+                                oldSummaryData && typeof oldSummaryData.title === "string"
+                                    && typeof oldSummaryData.concise === "string"
+                                    && typeof oldSummaryData.detailed === "string"
+                                    && Array.isArray(oldSummaryData.bullets)
+                                    ? oldSummaryData
+                                    : undefined
+                            );
+                        }, 0);
+                    }
+                    return prev;
+                });
             }
         },
         // Progress callback: update loading text if provided
