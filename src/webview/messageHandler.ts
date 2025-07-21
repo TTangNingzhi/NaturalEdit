@@ -827,6 +827,8 @@ async function handleCheckSectionValidity(
     // Ignore navigation errors, still report success
   }
 
+  // await handleGetSummary({}, webviewContainer);
+
   webviewContainer.webview.postMessage({
     command: "sectionValidityResult",
     status: "success",

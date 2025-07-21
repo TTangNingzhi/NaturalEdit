@@ -17,6 +17,7 @@
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
+  "extensionKind": ["ui", "workspace"],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
