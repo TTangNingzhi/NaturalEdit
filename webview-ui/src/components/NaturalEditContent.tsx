@@ -62,7 +62,7 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
                 marginBottom: SPACING.MEDIUM,
                 fontSize: FONT_SIZE.SUBTITLE
             }}>
-                Transform your code seamlessly by modifying its natural language descriptions.
+                Transform your code seamlessly by modifying its natural language representation.
             </div>
             <VSCodeButton
                 onClick={handleRequestSummary}

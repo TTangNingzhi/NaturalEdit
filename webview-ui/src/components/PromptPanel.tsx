@@ -134,7 +134,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
             {/* Direct Instruction Prompt Section */}
             <div style={{ marginBottom: SPACING.MEDIUM }}>
                 <div style={COMMON_STYLES.SECTION_HEADER}>
-                    <span style={COMMON_STYLES.SECTION_LABEL}>Direct Instruction Prompt</span>
+                    <span style={COMMON_STYLES.SECTION_LABEL}>Direct Instruction</span>
                     {loading.prompt1 ? (
                         <ClipLoader
                             color={COLORS.FOREGROUND}
@@ -142,10 +142,10 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         />
                     ) : (
                         <button
-                            title="Send Direct Prompt"
+                            title="Send Direct Instruction"
                             onClick={handleDirectPromptSend}
                             disabled={!directPrompt.trim() || loading.prompt1}
-                            aria-label="Send Direct Prompt"
+                            aria-label="Send Direct Instruction"
                             style={{
                                 ...COMMON_STYLES.ICON_BUTTON,
                                 opacity: (!directPrompt.trim() || loading.prompt1) ? 0.5 : 1,
@@ -220,7 +220,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
             <div>
                 <div style={COMMON_STYLES.SECTION_HEADER}>
                     <span style={COMMON_STYLES.SECTION_LABEL}>
-                        Summary-Mediated Prompt
+                        Modifiable Code Summary
                         {localEditPromptLevel ? ` (${localEditPromptLevel.charAt(0).toUpperCase() + localEditPromptLevel.slice(1)})` : ""}
                     </span>
                     {loading.prompt2 ? (
@@ -235,10 +235,10 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                                 opacity: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2) ? 0.5 : 1,
                                 cursor: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2) ? "not-allowed" : "pointer"
                             }}
-                            title="Send Summary Prompt"
+                            title="Send Modified Summary"
                             onClick={handleSummaryCommit}
                             disabled={!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2}
-                            aria-label="Send Summary Prompt"
+                            aria-label="Send Modified Summary"
                         >
                             <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />
                         </button>

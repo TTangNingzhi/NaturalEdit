@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
 import Section from "./Section.js";
 
@@ -13,8 +13,17 @@ interface SectionListProps {
  * Only one section can be open at a time.
  */
 const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange }) => {
-    // State to track the currently opened section
     const [openedSectionId, setOpenedSectionId] = useState<string | null>(null);
+    const prevSectionsRef = useRef<SectionData[]>(sections);
+
+    useEffect(() => {
+        const prevSections = prevSectionsRef.current;
+        if (sections.length > prevSections.length) {
+            // Auto open the newly created section
+            setOpenedSectionId(sections[sections.length - 1].metadata.id);
+        }
+        prevSectionsRef.current = sections;
+    }, [sections]);
 
     // Handler for segmented toggle change (per section)
     const handleLevelChange = (id: string, level: SummaryLevel) => {
