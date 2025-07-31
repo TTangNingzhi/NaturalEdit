@@ -168,16 +168,79 @@ You are an expert code summarizer. For the following code, generate a summary in
 4. Bulleted: up to 6 bullet points (could be less), each concise. Each bullet in the bullets array must start with a bullet character (•).
 
 IMPORTANT:
-- For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦".
 - The file context below is provided ONLY for reference to help understand the code's environment.
 - Your summary MUST focus ONLY on the specific code snippet provided.
-- Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
+- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
 
 File Context (for reference only):
 ${fileContext}
 
 Code to summarize:
 ${code}
+`;
+
+  const parsed = await callLLM(prompt, true);
+  return {
+    title: parsed.title || "",
+    concise: parsed.concise || "",
+    detailed: parsed.detailed || "",
+    bullets: Array.isArray(parsed.bullets) ? parsed.bullets : [],
+  };
+}
+
+/**
+ * Get a multi-level summary of modified code, referencing the original code and old summary.
+ * The new summary should be as close as possible to the old summary, only updating parts affected by the code change.
+ * @param newCode The modified code
+ * @param originalCode The original code before modification
+ * @param oldSummary The old summary object: { title, concise, detailed, bullets }
+ * @param fileContext The file context where the code is located
+ * @returns Object containing title, concise, detailed, and bulleted summaries
+ */
+export async function getSummaryWithReference(
+  newCode: string,
+  originalCode: string,
+  oldSummary: {
+    title: string;
+    concise: string;
+    detailed: string;
+    bullets: string[];
+  },
+  fileContext: string
+): Promise<{
+  title: string;
+  concise: string;
+  detailed: string;
+  bullets: string[];
+}> {
+  const prompt = `
+You are an expert code summarizer. Your task is to generate a new summary for the MODIFIED code below, using the original code and its previous summary as reference.
+
+Instructions:
+- The new summary should be as close as possible to the old summary, only updating the parts that are affected by the code change.
+- If a part of the summary is still accurate for the new code, keep it unchanged.
+- If a part of the summary is no longer accurate, update only that part to reflect the new code.
+- Do NOT add unnecessary changes or rephrase unchanged parts.
+- Your summary MUST focus on the code differences between the original and modified code, and clearly reflect those changes in the summary, even if the changes are only in inline comments.
+- If possible, make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update).
+- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
+
+File Context (for reference only):
+${fileContext}
+
+Original code:
+${originalCode}
+
+Old summary:
+{
+  "title": "${oldSummary.title}",
+  "concise": "${oldSummary.concise}",
+  "detailed": "${oldSummary.detailed}",
+  "bullets": ${JSON.stringify(oldSummary.bullets)}
+}
+
+MODIFIED code:
+${newCode}
 `;
 
   const parsed = await callLLM(prompt, true);
@@ -289,6 +352,8 @@ You are an expert code editor. Given the following original code and an updated 
 - Only change the code as needed to match the new summary, and keep the rest of the code unchanged.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - **Preserve all original blank lines unless their removal is necessary to match the updated summary.**
+- **Pay special attention to the lines before and after the changes. Make sure to not add code that is already present in the original code.**
+- **Make sure to not remove any lines that are not mentioned in the updated summary.**
 - Pay close attention to the differences between the original summary and the edited summary, which reflects developer's intent of what the new code should be.
 - Output only the updated code, nothing else.
 
@@ -298,10 +363,10 @@ ${fileContext}
 Original code:
 ${originalCode}
 
-Original summary (detail level: ${detailLevel}, structure: ${structuredType}):
+Original summary (${summaryLevel}):
 ${originalSummary}
 
-Updated summary (detail level: ${detailLevel}, structure: ${structuredType}):
+Updated summary (${summaryLevel}):
 ${editedSummary}
 
 Updated code:
@@ -329,6 +394,9 @@ You are an expert code editor. Given the following original code and a direct in
 - Only change the code as needed to satisfy the instruction, and keep the rest of the code unchanged.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - **Preserve all original blank lines unless their removal is necessary to match the updated summary.**
+- **Pay special attention to the lines before and after the changes. Make sure to not add code that is already present in the original code.**
+- **Make sure to not remove any lines that are not mentioned in the updated summary.**
+- Pay close attention to the differences between the original summary and the edited summary, which reflects developer's intent of what the new code should be.
 - Output only the updated code, nothing else.
 
 File Context (for reference only):
@@ -380,7 +448,7 @@ Given the following original summary and a direct instruction, update the summar
 Code Context (for reference only):
 ${originalCode}
 
-Original summary:
+Original summary (${summaryLevel}):
 ${originalSummary}
 
 Developer's instruction (integrate this intent fully into the updated summary):

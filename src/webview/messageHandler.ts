@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import {
   getCodeSummary,
+  getSummaryWithReference,
   getCodeFromSummaryEdit,
   getCodeFromDirectInstruction,
   getSummaryFromInstruction,
@@ -15,13 +16,13 @@ import DiffMatchPatch from "diff-match-patch";
 
 // Color palette for summary-code mapping highlights (must match frontend)
 const SUMMARY_CODE_MAPPING_COLORS = [
-  "#A3D3FF", // blue
   "#FFB3C6", // pink
   "#B9FBC0", // green
   "#FFD6A5", // orange
   "#D0BFFF", // purple
-  "#FFFACD", // yellow
+  "#A3D3FF", // blue
   "#FFDAC1", // peach
+  "#FFFACD", // yellow
 ];
 
 // Constants for code matching
@@ -142,6 +143,36 @@ interface PatchResult {
   success: boolean;
   patchedText?: string;
   error?: string;
+}
+
+/**
+ * Gets a pattern with context lines around it
+ * @param docText The full text of the document
+ * @param start The first line of the pattern
+ * @param end The last line of the pattern
+ * @param contextLines Number of context lines to include before and after pattern
+ * @return The pattern with context lines
+ */
+function getPatternWithContext(
+  docText: string,
+  start: number,
+  end: number,
+  contextLines = 2
+): string {
+  const lines = docText.split("\n");
+  const startLine = Math.max(
+    0,
+    docText.substr(0, start).split("\n").length - contextLines
+  );
+  const endLine = Math.min(
+    lines.length,
+    docText.substr(0, end).split("\n").length + contextLines
+  );
+  const before = lines
+    .slice(Math.max(0, startLine - contextLines), startLine)
+    .join("\n");
+  const after = lines.slice(endLine, endLine + contextLines + 1).join("\n");
+  return { before, after };
 }
 
 /**
@@ -341,22 +372,46 @@ async function handleClearHighlight() {
 }
 
 /**
- * Generates file context including file name, path and content
+ * Generates file context including file name, path, and context lines around the selected code.
  * @param filePath The full path of the file
+ * @param start The start offset of the selected code
+ * @param end The end offset of the selected code
+ * @param contextLines Number of context lines to include before and after (default: 2)
  * @returns Formatted file context string
  */
-async function generateFileContext(filePath: string): Promise<string> {
+async function generateFileContext(
+  filePath: string,
+  start: number,
+  end: number,
+  contextLines: number = 2
+): Promise<string> {
   try {
     const filename = path.basename(filePath);
-    const fileContent = await vscode.workspace.fs.readFile(
+    const fileContentBuffer = await vscode.workspace.fs.readFile(
       vscode.Uri.file(filePath)
     );
-    return `File: ${filename}\nPath: ${filePath}\n\nFile Content:\n${fileContent.toString()}`;
+    const fileContent = fileContentBuffer.toString();
+
+    // Use your helper to get before/after context
+    const { before, after } = getPatternWithContext(
+      fileContent,
+      start,
+      end,
+      contextLines
+    );
+    const selectedCode = fileContent.slice(start, end);
+
+    return (
+      `File: ${filename}\nPath: ${filePath}\n\n` +
+      `Context Before:\n${before}\n\n` +
+      `Selected Code:\n${selectedCode}\n\n` +
+      `Context After:\n${after}\n`
+    );
   } catch (error) {
     console.error("Error reading file for context:", error);
     return `File: ${path.basename(
       filePath
-    )}\nPath: ${filePath}\n\nFile Content:\n[Error reading file]`;
+    )}\nPath: ${filePath}\n\n[Error reading file or context]`;
   }
 }
 
@@ -367,8 +422,13 @@ async function handleGetSummary(
   message: any,
   webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
+  console.log(message);
+  // If present, use oldSummaryData from the message (for post-edit summary workflow)
+  const oldSummaryData = message.oldSummaryData || undefined;
+  // Use newCode from message if present, otherwise use current selection
   const editor = getLastActiveEditor();
-  const selectedText = editor?.document.getText(editor.selection) || "";
+  const selectedText =
+    message.newCode || editor?.document.getText(editor.selection) || "";
 
   if (!selectedText) {
     if (!editor) {
@@ -394,12 +454,60 @@ async function handleGetSummary(
     });
     const filePath = editor?.document.fileName || "";
     const fileContext = await generateFileContext(filePath);
-    const summary = await getCodeSummary(selectedText, fileContext);
+
+    // Use getSummaryWithReference if oldSummaryData is present, otherwise use getCodeSummary
+    let summary;
+    if (
+      oldSummaryData &&
+      oldSummaryData.title &&
+      oldSummaryData.concise &&
+      oldSummaryData.detailed &&
+      Array.isArray(oldSummaryData.bullets)
+    ) {
+      // Use originalCode from oldSummaryData context if available, else fallback to selectedText
+      const originalCode = oldSummaryData.originalCode || selectedText;
+      summary = await getSummaryWithReference(
+        selectedText,
+        originalCode,
+        oldSummaryData,
+        fileContext
+      );
+    } else {
+      summary = await getCodeSummary(selectedText, fileContext);
+    }
+
     const filename = editor ? path.basename(editor.document.fileName) : "";
     const fullPath = editor?.document.fileName || "";
-    const lines = editor
-      ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}`
-      : "";
+    // const lines = editor ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}` : '';
+
+    // Determine lines and offset based on whether newCode is used
+    let lines = "";
+    let offset = 0;
+    if (message.newCode && editor) {
+      // If newCode is present, find its position in the file and use that for lines and offset
+      const docText = editor.document.getText();
+      const match = findBestMatch(docText, message.newCode);
+      if (match.location !== -1) {
+        const startPos = editor.document.positionAt(match.location);
+        const endPos = editor.document.positionAt(
+          match.location + message.newCode.length
+        );
+        lines = `${startPos.line + 1}-${endPos.line + 1}`;
+        offset = match.location;
+      } else {
+        // Fallback to selection if not found
+        lines = `${editor.selection.start.line + 1}-${
+          editor.selection.end.line + 1
+        }`;
+        offset = editor.document.offsetAt(editor.selection.start);
+      }
+    } else if (editor) {
+      // Use the editor selection as before
+      lines = `${editor.selection.start.line + 1}-${
+        editor.selection.end.line + 1
+      }`;
+      offset = editor.document.offsetAt(editor.selection.start);
+    }
 
     // Stage 2: Mapping concise summary
     webviewContainer.webview.postMessage({
@@ -448,12 +556,15 @@ async function handleGetSummary(
       concise: summary.concise,
       createdAt: new Date().toLocaleString(),
       originalCode: selectedText,
-      offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
+      // offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
+      offset,
       summaryMappings: {
         concise: conciseMappings,
         detailed: detailedMappings,
         bullets: bulletsMappings,
       },
+      // Pass oldSummaryData if present (for diffed rendering in frontend)
+      ...(oldSummaryData ? { oldSummaryData } : {}),
     });
   } catch (err: any) {
     webviewContainer.webview.postMessage({
@@ -747,12 +858,49 @@ async function applyCodeChanges(
 
     // Optionally, focus the diff editor (VSCode will usually do this automatically)
 
-    // --- Notify frontend as before ---
+    // --- After patch, notify frontend with the new code ---
+    const patchedText = result.patchedText || "";
+    let newCodeRegion = patchedText;
+    try {
+      const updatedDocument = await vscode.workspace.openTextDocument(fileUri);
+      const updatedText = updatedDocument.getText();
+
+      // Add context lines to the pattern for matching
+      const offset = typeof message.offset === "number" ? message.offset : 0;
+      const start = offset;
+      const end = offset + patchedText.length;
+      const { before, after } = getPatternWithContext(
+        updatedText,
+        start,
+        end,
+        2
+      );
+      const patternWithContext = [before, patchedText, after]
+        .filter(Boolean)
+        .join("\n");
+
+      let matchLoc = -1;
+      try {
+        const dmp = new DiffMatchPatch();
+        matchLoc = dmp.match_main(updatedText, patternWithContext, 0);
+      } catch (e) {
+        matchLoc = updatedText.indexOf(patternWithContext);
+      }
+      if (matchLoc !== -1) {
+        newCodeRegion = updatedText.slice(
+          matchLoc + (before ? before.length + 1 : 0),
+          matchLoc + (before ? before.length + 1 : 0) + patchedText.length
+        );
+      }
+    } catch (e) {
+      // Fallback: use patchedText as newCodeRegion
+    }
+
     webviewContainer.webview.postMessage({
       command: "editResult",
       sectionId: message.sectionId,
       action,
-      newCode: result.patchedText,
+      newCode: newCodeRegion,
     });
   } catch (error) {
     console.error("Error applying code changes:", error);
