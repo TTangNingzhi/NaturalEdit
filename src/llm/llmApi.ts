@@ -280,7 +280,7 @@ export async function buildSummaryMapping(
 > {
     // The prompt now explicitly requires that each summaryComponent must be a substring of the summary.
     const prompt = `
-You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 7 key summary components (phrases or semantic units) from the summary.
+You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 10 key summary components (phrases or semantic units) from the summary.
 IMPORTANT:
 1. Each summaryComponent you extract MUST be a substring (exact part) of the summary text below.
 2. Extract summaryComponents in the exact order they appear in the summary text.

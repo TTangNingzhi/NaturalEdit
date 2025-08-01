@@ -4,7 +4,7 @@
 import React from "react";
 import DiffMatchPatch from "diff-match-patch";
 import { SummaryCodeMapping } from "../types/sectionTypes";
-import { SUMMARY_CODE_MAPPING_COLORS, BORDER_RADIUS, COLORS } from "../styles/constants";
+import { SUMMARY_CODE_MAPPING_COLORS, BORDER_RADIUS, COLORS, getMappingHighlightBackground } from "../styles/constants";
 
 /**
  * Renders the diff between oldText and newText.
@@ -156,14 +156,14 @@ export function renderDiffedTextWithMapping(
       // Render mapping region as a single highlight span, with nested diff coloring
       const { start, end, mappingIndex } = nextMapping;
       const style: React.CSSProperties = {
-        background:
-          SUMMARY_CODE_MAPPING_COLORS[mappingIndex % SUMMARY_CODE_MAPPING_COLORS.length] +
-          (activeMappingIndex === mappingIndex ? "CC" : "40"),
+        ...getMappingHighlightBackground(
+          SUMMARY_CODE_MAPPING_COLORS[mappingIndex % SUMMARY_CODE_MAPPING_COLORS.length],
+          activeMappingIndex === mappingIndex
+        ),
         borderRadius: BORDER_RADIUS.SMALL,
         padding: "0 2px",
         margin: "0 1px",
-        cursor: "pointer",
-        transition: "background 0.15s",
+        cursor: "pointer"
       };
       output.push(
         <span

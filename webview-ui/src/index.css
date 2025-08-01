@@ -3,7 +3,7 @@
 
 /* Base slider styles */
 input[type="range"].themed-slider {
-  width: 50px;
+  width: 45px;
   height: 24px;
   background: transparent;
   /* Remove default appearance for Chromium */

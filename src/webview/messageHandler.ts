@@ -14,8 +14,12 @@ const SUMMARY_CODE_MAPPING_COLORS = [
     "#FFD6A5", // orange
     "#D0BFFF", // purple
     "#A3D3FF", // blue
-    "#FFDAC1",  // peach
+    "#FFDAC1", // peach
     "#FFFACD", // yellow
+    "#E0BBE4", // lavender
+    "#FEC8D8", // pastel rose
+    "#C7CEEA", // periwinkle
+    "#B5EAD7", // mint
 ];
 
 // Constants for code matching

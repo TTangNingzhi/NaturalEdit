@@ -225,7 +225,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     <span style={COMMON_STYLES.SECTION_LABEL}>
                         Modifiable Code Summary
                         {localEditPromptDetailLevel && localEditPromptStructured
-                            ? ` (${localEditPromptDetailLevel.charAt(0).toUpperCase() + localEditPromptDetailLevel.slice(1)}, ${localEditPromptStructured})`
+                            ? ` (${localEditPromptDetailLevel}, ${localEditPromptStructured})`
                             : ""}
                     </span>
                     {loading.prompt2 ? (

@@ -37,9 +37,30 @@ export const SUMMARY_CODE_MAPPING_COLORS = [
     "#FFD6A5", // orange
     "#D0BFFF", // purple
     "#A3D3FF", // blue
-    "#FFDAC1",  // peach
+    "#FFDAC1", // peach
     "#FFFACD", // yellow
+    "#E0BBE4", // lavender
+    "#FEC8D8", // pastel rose
+    "#C7CEEA", // periwinkle
+    "#B5EAD7", // mint
 ] as const;
+
+/**
+ * Returns a CSS background for mapping highlights using color-mix with fallback.
+ * @param baseColor - The pastel color (hex)
+ * @param isActive - Whether the mapping is active (hovered)
+ * @returns CSSProperties with background and fallback
+ */
+export function getMappingHighlightBackground(baseColor: string, isActive: boolean): React.CSSProperties {
+    // Use color-mix for modern browsers, fallback to alpha hex for older environments
+    const pastelAlpha = isActive ? "CC" : "40"; // 40 = 25% alpha, CC = 80% alpha
+    return {
+        background: `color-mix(in srgb, var(--vscode-editor-background) 70%, ${baseColor})`,
+        backgroundColor: `${baseColor}${pastelAlpha}`,
+        backgroundBlendMode: "multiply",
+        transition: "background 0.15s"
+    };
+}
 
 /**
  * Spacing constants for consistent layout
