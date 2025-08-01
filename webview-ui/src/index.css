@@ -1,2 +1,57 @@
 /* Import codicon font for icon support. */
 @import "../node_modules/@vscode/codicons/dist/codicon.css";
+
+/* Base slider styles */
+input[type="range"].themed-slider {
+  width: 50px;
+  height: 24px;
+  background: transparent;
+  /* Remove default appearance for Chromium */
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Track styles (Webkit only, Chromium-based VSCode webview) */
+input[type="range"].themed-slider::-webkit-slider-runnable-track {
+  height: 10px; /* Thicker track for better visibility */
+  background: var(--vscode-panel-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px; /* Match BORDER_RADIUS.SMALL */
+}
+
+/* Thumb styles (Webkit only) */
+input[type="range"].themed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--vscode-descriptionForeground);
+  border: 2px solid var(--vscode-panel-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+  margin-top: -3px; /* Center thumb in track */
+}
+
+/* Focus style for accessibility */
+input[type="range"].themed-slider:focus {
+  outline: none;
+}
+input[type="range"].themed-slider:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--vscode-editorGroupHeader-tabsBackground);
+}
+
+.small-checkbox::part(control) {
+  width: 14px;
+  height: 14px;
+  margin-right: -2px;
+}
+
+.small-checkbox::part(label) {
+  margin-left: -2px;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground);
+}

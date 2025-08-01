@@ -136,7 +136,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
             {/* Direct Instruction Prompt Section */}
             <div style={{ marginBottom: SPACING.MEDIUM }}>
                 <div style={COMMON_STYLES.SECTION_HEADER}>
-                    <span style={COMMON_STYLES.SECTION_LABEL}>Direct Instruction</span>
+                    <span style={COMMON_STYLES.SECTION_LABEL}>Edit Instruction</span>
                     {loading.prompt1 ? (
                         <ClipLoader
                             color={COLORS.FOREGROUND}
@@ -144,10 +144,10 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         />
                     ) : (
                         <button
-                            title="Send Direct Instruction"
+                            title="Send Edit Instruction"
                             onClick={handleDirectPromptSend}
                             disabled={!directPrompt.trim() || loading.prompt1}
-                            aria-label="Send Direct Instruction"
+                            aria-label="Send Edit Instruction"
                             style={{
                                 ...COMMON_STYLES.ICON_BUTTON,
                                 opacity: (!directPrompt.trim() || loading.prompt1) ? 0.5 : 1,
@@ -162,7 +162,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     value={directPrompt}
                     onInput={e => setDirectPrompt((e.target as HTMLTextAreaElement).value)}
                     style={{ width: "100%", marginBottom: SPACING.TINY, fontFamily: "monospace", fontSize: FONT_SIZE.SMALL }}
-                    placeholder="Enter a direct instruction."
+                    placeholder="Enter a direct edit instruction."
                     resize="vertical"
                     rows={3}
                     disabled={false}

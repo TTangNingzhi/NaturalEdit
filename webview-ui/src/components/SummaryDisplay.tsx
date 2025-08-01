@@ -2,6 +2,7 @@ import React from "react";
 import { SummaryData, DetailLevel, StructuredType, SummaryCodeMapping } from "../types/sectionTypes.js";
 import { FONT_SIZE, COLORS, SPACING, BORDER_RADIUS, COMMON_STYLES } from "../styles/constants.js";
 import { renderDiffedTextWithMapping } from "../utils/diffRender";
+import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react";
 
 /**
  * Props for the SummaryDisplay component
@@ -53,12 +54,6 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
     // Slider values and labels
     const detailLevels: DetailLevel[] = ["low", "medium", "high"];
 
-    // Toggle for structured/unstructured
-    const structuredLabels: Record<StructuredType, string> = {
-        unstructured: "Paragraph",
-        structured: "Bulleted"
-    };
-
     // Mapping key for summaryMappings
     const mappingKey = getSummaryKey(selectedDetailLevel, selectedStructured);
 
@@ -66,34 +61,40 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
         <div style={COMMON_STYLES.SECTION_COMPACT}>
             {/* Option row: slider and toggle left, edit button right */}
             <div style={COMMON_STYLES.SECTION_HEADER}>
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    {/* Detail slider */}
-                    <input
-                        type="range"
-                        min={0}
-                        max={2}
-                        step={1}
-                        value={detailLevels.indexOf(selectedDetailLevel)}
-                        onChange={e => {
-                            const idx = Number(e.target.value);
-                            onLevelChange(detailLevels[idx], selectedStructured);
-                        }}
-                        style={{ width: 80, marginRight: 8 }}
-                        aria-label="Detail Level"
-                    />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {/* Structured toggle */}
-                    <input
-                        type="checkbox"
+                    <VSCodeCheckbox
+                        className="small-checkbox"
                         checked={selectedStructured === "structured"}
                         onChange={e => {
+                            const checked = (e.target as HTMLInputElement).checked;
                             onLevelChange(
                                 selectedDetailLevel,
-                                e.target.checked ? "structured" : "unstructured"
+                                checked ? "structured" : "unstructured"
                             );
                         }}
                         aria-label="Structured"
-                    />
-                    <span>{structuredLabels[selectedStructured]}</span>
+                    >
+                        Structured
+                    </VSCodeCheckbox>
+                    {/* Detail label and slider as a group */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {/* Use theme color for label */}
+                        <span style={{ fontSize: "13px", color: COLORS.DESCRIPTION }}>Granularity</span>
+                        <input
+                            type="range"
+                            min={0}
+                            max={2}
+                            step={1}
+                            value={detailLevels.indexOf(selectedDetailLevel)}
+                            onChange={e => {
+                                const idx = Number(e.target.value);
+                                onLevelChange(detailLevels[idx], selectedStructured);
+                            }}
+                            className="themed-slider"
+                            aria-label="Detail Level"
+                        />
+                    </div>
                 </div>
                 <button
                     style={COMMON_STYLES.ICON_BUTTON}
