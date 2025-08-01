@@ -405,7 +405,7 @@ async function handleGetSummary(
             offset = editor.document.offsetAt(editor.selection.start);
         }
 
-        // Stage 2+: Build mapping for all 6 summary types
+        // Stage 2+: Build mapping for all 6 summary types (concurrent)
         const mappingKeys = [
             ["low", "unstructured"],
             ["low", "structured"],
@@ -415,16 +415,26 @@ async function handleGetSummary(
             ["high", "structured"]
         ] as const;
 
-        const summaryMappings: Record<string, any[]> = {};
-        for (const [detail, structured] of mappingKeys) {
+        // Only report progress once before all mappings
+        webviewContainer.webview.postMessage({
+            command: 'summaryProgress',
+            stageText: 'Mapping all summaries...'
+        });
+
+        // Run all mappings concurrently
+        const mappingPromises = mappingKeys.map(([detail, structured]) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
             const summaryText = (summary as any)[key] || "";
-            webviewContainer.webview.postMessage({
-                command: 'summaryProgress',
-                stageText: `Mapping ${detail} ${structured} summary...`
-            });
-            summaryMappings[key] = await buildSummaryMapping(selectedText, summaryText);
-        }
+            return buildSummaryMapping(selectedText, summaryText);
+        });
+        const mappingResults = await Promise.all(mappingPromises);
+
+        // Assemble summaryMappings object
+        const summaryMappings: Record<string, any[]> = {};
+        mappingKeys.forEach(([detail, structured], idx) => {
+            const key = `${detail}_${structured}` as keyof typeof summary;
+            summaryMappings[key] = mappingResults[idx];
+        });
 
         // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({
