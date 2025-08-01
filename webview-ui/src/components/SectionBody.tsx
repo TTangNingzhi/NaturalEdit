@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
 import SummaryDisplay from "./SummaryDisplay.js";
 import PromptPanel from "./PromptPanel.js";
-import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData, DetailLevel, StructuredType } from "../types/sectionTypes.js";
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE } from "../styles/constants.js";
 import { vscodeApi } from "../utils/vscodeApi"; // Import VSCode API for backend communication
 
 interface SectionBodyProps {
     section: SectionData;
-    onLevelChange: (level: SummaryLevel) => void;
-    onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
+    onLevelChange: (detail: DetailLevel, structured: StructuredType) => void;
+    onEditPrompt: (detail: DetailLevel, structured: StructuredType, value: string) => void;
     onDeleteSection: () => void; // Handler for deleting the section
 }
 
@@ -28,7 +28,8 @@ const SectionBody: React.FC<SectionBodyProps> = ({
 }) => {
     const {
         summaryData,
-        selectedLevel,
+        selectedDetailLevel,
+        selectedStructured,
         summaryMappings
     } = section;
 
@@ -38,8 +39,9 @@ const SectionBody: React.FC<SectionBodyProps> = ({
     // State for section validity: "pending" | "success" | "file_missing" | "code_not_matched"
     const [validityStatus, setValidityStatus] = useState<"pending" | "success" | "file_missing" | "code_not_matched">("pending");
 
-    // Get the mapping array for the current summary level
-    const rawMappings = summaryMappings?.[selectedLevel] || [];
+    // Get the mapping array for the current summary type
+    const mappingKey = `${selectedDetailLevel}_${selectedStructured}` as keyof typeof summaryMappings;
+    const rawMappings = summaryMappings?.[mappingKey] || [];
 
     /**
      * Handles hover events on summary mapping components.
@@ -120,7 +122,8 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             {/* Main content */}
             <SummaryDisplay
                 summary={summaryData}
-                selectedLevel={selectedLevel}
+                selectedDetailLevel={selectedDetailLevel}
+                selectedStructured={selectedStructured}
                 onLevelChange={onLevelChange}
                 onEditPrompt={onEditPrompt}
                 summaryMappings={summaryMappings}

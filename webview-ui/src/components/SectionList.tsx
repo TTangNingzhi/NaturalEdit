@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData, DetailLevel, StructuredType } from "../types/sectionTypes.js";
 import Section from "./Section.js";
 
 interface SectionListProps {
@@ -25,22 +25,23 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
         prevSectionsRef.current = sections;
     }, [sections]);
 
-    // Handler for segmented toggle change (per section)
-    const handleLevelChange = (id: string, level: SummaryLevel) => {
+    // Handler for summary type change (per section)
+    const handleLevelChange = (id: string, detail: DetailLevel, structured: StructuredType) => {
         onSectionsChange(
             sections.map(s =>
-                s.metadata.id === id ? { ...s, selectedLevel: level } : s
+                s.metadata.id === id
+                    ? { ...s, selectedDetailLevel: detail, selectedStructured: structured }
+                    : s
             )
         );
     };
 
     // Handler for "Edit In Prompt" button (per section)
-    const handleEditPrompt = (id: string, level: SummaryLevel, value: string | string[]) => {
-        const stringValue = Array.isArray(value) ? value.join(", ") : value;
+    const handleEditPrompt = (id: string, detail: DetailLevel, structured: StructuredType, value: string) => {
         onSectionsChange(
             sections.map(s =>
                 s.metadata.id === id
-                    ? { ...s, editPromptLevel: level, editPromptValue: stringValue }
+                    ? { ...s, editPromptDetailLevel: detail, editPromptStructured: structured, editPromptValue: value }
                     : s
             )
         );
@@ -55,7 +56,7 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
                 onSectionsChange(
                     sections.map(s =>
                         s.metadata.id === id
-                            ? { ...s, editPromptValue: "", editPromptLevel: null }
+                            ? { ...s, editPromptValue: "", editPromptDetailLevel: null, editPromptStructured: null }
                             : s
                     )
                 );
@@ -77,8 +78,12 @@ const SectionList: React.FC<SectionListProps> = ({ sections, onSectionsChange })
                 <Section
                     key={section.metadata.id}
                     section={section}
-                    onLevelChange={(level: SummaryLevel) => handleLevelChange(section.metadata.id, level)}
-                    onEditPrompt={(level, value) => handleEditPrompt(section.metadata.id, level, value)}
+                    onLevelChange={(detail: DetailLevel, structured: StructuredType) =>
+                        handleLevelChange(section.metadata.id, detail, structured)
+                    }
+                    onEditPrompt={(detail: DetailLevel, structured: StructuredType, value: string) =>
+                        handleEditPrompt(section.metadata.id, detail, structured, value)
+                    }
                     collapsed={section.metadata.id !== openedSectionId}
                     onToggle={() => handleToggleSection(section.metadata.id)}
                     onDeleteSection={() => handleDeleteSection(section.metadata.id)}

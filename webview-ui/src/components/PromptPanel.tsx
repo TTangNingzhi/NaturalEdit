@@ -4,7 +4,7 @@ import {
     VSCodeTextArea
 } from "@vscode/webview-ui-toolkit/react/index.js";
 import { SummaryDiffEditor } from "./SummaryDiffEditor";
-import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData, DetailLevel, StructuredType } from "../types/sectionTypes.js";
 import { FONT_SIZE, SPACING, COMMON_STYLES, COLORS } from "../styles/constants.js";
 import { usePrompt } from "../hooks/usePrompt.js";
 import { ClipLoader } from "react-spinners";
@@ -27,7 +27,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
         prompt1: null,
         prompt2: null,
     });
-    const { metadata, editPromptLevel, editPromptValue } = section;
+    const { metadata, editPromptDetailLevel, editPromptStructured, editPromptValue } = section;
     const { onDirectPrompt, onPromptToSummary, onSummaryPrompt } = usePrompt(metadata);
 
     // Direct Prompt state
@@ -38,7 +38,8 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     // For summary diff editor
     const [currentSummary, setCurrentSummary] = useState<string>("");
     const [originalSummary, setOriginalSummary] = useState<string>("");
-    const [localEditPromptLevel, setLocalEditPromptLevel] = useState<SummaryLevel | null>(null);
+    const [localEditPromptDetailLevel, setLocalEditPromptDetailLevel] = useState<DetailLevel | null>(null);
+    const [localEditPromptStructured, setLocalEditPromptStructured] = useState<StructuredType | null>(null);
     const editPromptValueRef = useRef(editPromptValue);
 
     // Keep summary in sync with editPromptValue
@@ -48,13 +49,14 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
         editPromptValueRef.current = editPromptValue;
     }, [editPromptValue]);
 
-    // Set originalSummary only when entering edit mode (editPromptLevel changes from null to a value)
+    // Set originalSummary only when entering edit mode (editPromptDetailLevel/Structured changes from null to a value)
     useEffect(() => {
-        if (editPromptLevel) {
+        if (editPromptDetailLevel && editPromptStructured) {
             setOriginalSummary(editPromptValueRef.current);
-            setLocalEditPromptLevel(editPromptLevel);
+            setLocalEditPromptDetailLevel(editPromptDetailLevel);
+            setLocalEditPromptStructured(editPromptStructured);
         }
-    }, [editPromptLevel]);
+    }, [editPromptDetailLevel, editPromptStructured]);
 
     // Type guard to check if an error has a string message property
     function isErrorWithMessage(err: unknown): err is { message: string } {
@@ -90,11 +92,11 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     // Apply direct prompt to summary
     const handleApplyToSummary = async () => {
         const action = "applyToSummary";
-        if (editPromptLevel && directPrompt.trim()) {
+        if (editPromptDetailLevel && editPromptStructured && directPrompt.trim()) {
             setLoading(prev => ({ ...prev, [action]: true }));
             setError(prev => ({ ...prev, [action]: null }));
             try {
-                await onPromptToSummary(editPromptLevel, originalSummary, directPrompt.trim());
+                await onPromptToSummary(editPromptDetailLevel, editPromptStructured, originalSummary, directPrompt.trim());
                 setLoading(prev => ({ ...prev, [action]: false }));
                 setError(prev => ({ ...prev, [action]: null }));
             } catch (err: unknown) {
@@ -111,11 +113,11 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     // Commit summary to backend
     const handleSummaryCommit = async () => {
         const action = "prompt2";
-        if (localEditPromptLevel && currentSummary.trim()) {
+        if (localEditPromptDetailLevel && localEditPromptStructured && currentSummary.trim()) {
             setLoading(prev => ({ ...prev, [action]: true }));
             setError(prev => ({ ...prev, [action]: null }));
             try {
-                await onSummaryPrompt(localEditPromptLevel, currentSummary.trim(), originalSummary);
+                await onSummaryPrompt(localEditPromptDetailLevel, localEditPromptStructured, currentSummary.trim(), originalSummary);
                 setLoading(prev => ({ ...prev, [action]: false }));
                 setError(prev => ({ ...prev, [action]: null }));
             } catch (err: unknown) {
@@ -170,7 +172,8 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                     onClick={handleApplyToSummary}
                     disabled={
                         !directPrompt.trim() ||
-                        !editPromptLevel ||
+                        !editPromptDetailLevel ||
+                        !editPromptStructured ||
                         !summary.trim() ||
                         loading.applyToSummary
                     }
@@ -221,7 +224,9 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                 <div style={COMMON_STYLES.SECTION_HEADER}>
                     <span style={COMMON_STYLES.SECTION_LABEL}>
                         Modifiable Code Summary
-                        {localEditPromptLevel ? ` (${localEditPromptLevel.charAt(0).toUpperCase() + localEditPromptLevel.slice(1)})` : ""}
+                        {localEditPromptDetailLevel && localEditPromptStructured
+                            ? ` (${localEditPromptDetailLevel.charAt(0).toUpperCase() + localEditPromptDetailLevel.slice(1)}, ${localEditPromptStructured})`
+                            : ""}
                     </span>
                     {loading.prompt2 ? (
                         <ClipLoader
@@ -232,12 +237,12 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
                         <button
                             style={{
                                 ...COMMON_STYLES.ICON_BUTTON,
-                                opacity: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2) ? 0.5 : 1,
-                                cursor: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2) ? "not-allowed" : "pointer"
+                                opacity: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptDetailLevel || !localEditPromptStructured || loading.prompt2) ? 0.5 : 1,
+                                cursor: (!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptDetailLevel || !localEditPromptStructured || loading.prompt2) ? "not-allowed" : "pointer"
                             }}
                             title="Send Modified Summary"
                             onClick={handleSummaryCommit}
-                            disabled={!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptLevel || loading.prompt2}
+                            disabled={!currentSummary.trim() || currentSummary.trim() === originalSummary || !localEditPromptDetailLevel || !localEditPromptStructured || loading.prompt2}
                             aria-label="Send Modified Summary"
                         >
                             <span className="codicon codicon-send" style={{ fontSize: FONT_SIZE.ICON }} />

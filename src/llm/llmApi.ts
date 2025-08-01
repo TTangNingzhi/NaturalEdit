@@ -144,21 +144,27 @@ async function callLLM(prompt: string, parseJson: boolean = false): Promise<any>
  */
 export async function getCodeSummary(code: string, fileContext: string): Promise<{
     title: string;
-    concise: string;
-    detailed: string;
-    bullets: string[];
+    low_unstructured: string;
+    low_structured: string;
+    medium_unstructured: string;
+    medium_structured: string;
+    high_unstructured: string;
+    high_structured: string;
 }> {
     const prompt = `
-You are an expert code summarizer. For the following code, generate a summary in four levels:
-1. Title: 3-5 words, no more.
-2. Concise: One-sentence summary.
-3. Detailed: One detailed sentence.
-4. Bulleted: up to 6 bullet points (could be less), each concise. Each bullet in the bullets array must start with a bullet character (•).
+You are an expert code summarizer. For the following code, generate 6 summaries, one for each combination of detail level (low, medium, high) and structure (unstructured/paragraph, structured/bulleted):
+- low_unstructured: One-sentence, low-detail, paragraph style.
+- low_structured: 2-3 short bullet points, low-detail, as a single string. Each bullet must start with "•" and be separated by \\n. Never return an array.
+- medium_unstructured: 2-3 sentences, medium-detail, paragraph style.
+- medium_structured: 3-5 bullet points, medium-detail, as a single string. Use "•" for first-level bullets, and ENCOURAGE the use of two-level bullets (use "◦" for the second level, and indent the second-level bullet with 2 spaces before the "◦") when logical groupings exist. Bullets must be separated by \\n. Never return an array.
+- high_unstructured: 3-4 sentences, high-detail, paragraph style.
+- high_structured: 4-8 bullet points, high-detail, as a single string. Use "•" for first-level bullets, and ENCOURAGE the use of two-level bullets (use "◦" for the second level, and indent the second-level bullet with 2 spaces before the "◦") when logical groupings exist. Bullets must be separated by \\n. Never return an array.
 
 IMPORTANT:
+- For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦".
 - The file context below is provided ONLY for reference to help understand the code's environment.
 - Your summary MUST focus ONLY on the specific code snippet provided.
-- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
+- Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
 
 File Context (for reference only):
 ${fileContext}
@@ -170,9 +176,12 @@ ${code}
     const parsed = await callLLM(prompt, true);
     return {
         title: parsed.title || '',
-        concise: parsed.concise || '',
-        detailed: parsed.detailed || '',
-        bullets: Array.isArray(parsed.bullets) ? parsed.bullets : [],
+        low_unstructured: parsed.low_unstructured || '',
+        low_structured: parsed.low_structured || '',
+        medium_unstructured: parsed.medium_unstructured || '',
+        medium_structured: parsed.medium_structured || '',
+        high_unstructured: parsed.high_unstructured || '',
+        high_structured: parsed.high_structured || '',
     };
 }
 
@@ -188,13 +197,24 @@ ${code}
 export async function getSummaryWithReference(
     newCode: string,
     originalCode: string,
-    oldSummary: { title: string; concise: string; detailed: string; bullets: string[] },
+    oldSummary: {
+        title: string;
+        low_unstructured: string;
+        low_structured: string;
+        medium_unstructured: string;
+        medium_structured: string;
+        high_unstructured: string;
+        high_structured: string;
+    },
     fileContext: string
 ): Promise<{
     title: string;
-    concise: string;
-    detailed: string;
-    bullets: string[];
+    low_unstructured: string;
+    low_structured: string;
+    medium_unstructured: string;
+    medium_structured: string;
+    high_unstructured: string;
+    high_structured: string;
 }> {
     const prompt = `
 You are an expert code summarizer. Your task is to generate a new summary for the MODIFIED code below, using the original code and its previous summary as reference.
@@ -206,7 +226,9 @@ Instructions:
 - Do NOT add unnecessary changes or rephrase unchanged parts.
 - Your summary MUST focus on the code differences between the original and modified code, and clearly reflect those changes in the summary, even if the changes are only in inline comments.
 - If possible, make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update).
-- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
+- For all structured (bulleted) summaries, return as a single string. Each bullet must start with "•" and be separated by \\n. ENCOURAGE the use of two-level bullets (use "◦" for the second level) for medium_structured and high_structured when logical groupings exist. Never return an array.
+- For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦".
+- Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
 
 File Context (for reference only):
 ${fileContext}
@@ -217,9 +239,12 @@ ${originalCode}
 Old summary:
 {
   "title": "${oldSummary.title}",
-  "concise": "${oldSummary.concise}",
-  "detailed": "${oldSummary.detailed}",
-  "bullets": ${JSON.stringify(oldSummary.bullets)}
+  "low_unstructured": "${oldSummary.low_unstructured}",
+  "low_structured": "${oldSummary.low_structured}",
+  "medium_unstructured": "${oldSummary.medium_unstructured}",
+  "medium_structured": "${oldSummary.medium_structured}",
+  "high_unstructured": "${oldSummary.high_unstructured}",
+  "high_structured": "${oldSummary.high_structured}"
 }
 
 MODIFIED code:
@@ -229,9 +254,12 @@ ${newCode}
     const parsed = await callLLM(prompt, true);
     return {
         title: parsed.title || '',
-        concise: parsed.concise || '',
-        detailed: parsed.detailed || '',
-        bullets: Array.isArray(parsed.bullets) ? parsed.bullets : [],
+        low_unstructured: parsed.low_unstructured || '',
+        low_structured: parsed.low_structured || '',
+        medium_unstructured: parsed.medium_unstructured || '',
+        medium_structured: parsed.medium_structured || '',
+        high_unstructured: parsed.high_unstructured || '',
+        high_structured: parsed.high_structured || '',
     };
 }
 
@@ -325,12 +353,13 @@ ${summaryText}
 export async function getCodeFromSummaryEdit(
     originalCode: string,
     editedSummary: string,
-    summaryLevel: string,
+    detailLevel: string,
+    structuredType: string,
     fileContext: string,
     originalSummary: string
 ): Promise<string> {
     const prompt = `
-You are an expert code editor. Given the following original code and an updated summary (${summaryLevel}), update the code to reflect the changes in the new summary.
+You are an expert code editor. Given the following original code and an updated summary (detail level: ${detailLevel}, structure: ${structuredType}), update the code to reflect the changes in the new summary.
 - The file context below is provided ONLY for reference to help understand the code's environment, and your code changes MUST focus ONLY on the specific code snippet provided.
 - Only change the code as needed to match the new summary, and keep the rest of the code unchanged.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
@@ -343,10 +372,10 @@ ${fileContext}
 Original code:
 ${originalCode}
 
-Original summary (${summaryLevel}):
+Original summary (detail level: ${detailLevel}, structure: ${structuredType}):
 ${originalSummary}
 
-Updated summary (${summaryLevel}):
+Updated summary (detail level: ${detailLevel}, structure: ${structuredType}):
 ${editedSummary}
 
 Updated code:
@@ -402,7 +431,6 @@ Updated code:
 export async function getSummaryFromInstruction(
     originalCode: string,
     originalSummary: string,
-    summaryLevel: string,
     instruction: string
 ): Promise<string> {
     const prompt = `
@@ -424,7 +452,7 @@ Given the following original summary and a direct instruction, update the summar
 Code Context (for reference only):
 ${originalCode}
 
-Original summary (${summaryLevel}):
+Original summary:
 ${originalSummary}
 
 Developer's instruction (integrate this intent fully into the updated summary):

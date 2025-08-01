@@ -72,17 +72,25 @@ export const setupMessageHandler = (
                             return [start || 0, end || 0];
                         })(),
                         title: msg.title || "Untitled",
-                        concise: msg.concise || "",
                         createdAt: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
                         summaryData: msg.data,
-                        selectedLevel: "concise",
-                        editPromptLevel: null,
+                        oldSummaryData: msg.oldSummaryData,
+                        // Selection state, default to low/unstructured
+                        selectedDetailLevel: "low",
+                        selectedStructured: "unstructured",
+                        editPromptDetailLevel: null,
+                        editPromptStructured: null,
                         editPromptValue: "",
                         summaryMappings: msg.summaryMappings
                             ? msg.summaryMappings
-                            : { concise: [], detailed: [], bullets: [] },
-                        // Pass oldSummaryData for diff rendering if present and valid
-                        ...(msg.oldSummaryData ? { oldSummaryData: msg.oldSummaryData } : {})
+                            : {
+                                low_unstructured: [],
+                                low_structured: [],
+                                medium_unstructured: [],
+                                medium_structured: [],
+                                high_unstructured: [],
+                                high_structured: []
+                            }
                     });
                 }
                 break;
@@ -108,10 +116,7 @@ export const setupMessageHandler = (
                         requestSummary(
                             msg.newCode,
                             oldSummaryData &&
-                                typeof oldSummaryData.title === "string" &&
-                                typeof oldSummaryData.concise === "string" &&
-                                typeof oldSummaryData.detailed === "string" &&
-                                Array.isArray(oldSummaryData.bullets)
+                                typeof oldSummaryData.title === "string"
                                 ? oldSummaryData
                                 : undefined
                         );
@@ -187,7 +192,8 @@ export const sendDirectPrompt = (
  */
 export const sendEditSummary = (
     sectionId: string,
-    level: string,
+    detail: string,
+    structured: string,
     value: string,
     originalCode: string,
     filename: string,
@@ -198,7 +204,8 @@ export const sendEditSummary = (
     vscodeApi.postMessage({
         command: "summaryPrompt",
         summaryText: value,
-        summaryLevel: level,
+        detailLevel: detail,
+        structuredType: structured,
         sectionId,
         originalCode,
         filename,
@@ -221,8 +228,9 @@ export const sendEditSummary = (
  */
 export const sendPromptToSummary = (
     sectionId: string,
-    level: string,
-    summary: string,
+    detail: string,
+    structured: string,
+    originalSummary: string,
     prompt: string,
     originalCode: string,
     filename: string,
@@ -231,8 +239,9 @@ export const sendPromptToSummary = (
 ) => {
     vscodeApi.postMessage({
         command: "promptToSummary",
-        summaryText: summary,
-        summaryLevel: level,
+        detailLevel: detail,
+        structuredType: structured,
+        originalSummary,
         promptText: prompt,
         sectionId,
         originalCode,
@@ -265,12 +274,10 @@ export const createStatefulMessageHandler = (
             return prev;
         });
         if (found) {
+            // Return a shallow copy of the summaryData for diff rendering
             return {
-                title: found.title,
-                concise: found.summaryData.concise,
-                detailed: found.summaryData.detailed,
-                bullets: found.summaryData.bullets,
-                originalCode: found.metadata.originalCode
+                ...found.summaryData,
+                title: found.title
             };
         }
         return undefined;
