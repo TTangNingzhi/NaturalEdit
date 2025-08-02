@@ -353,7 +353,7 @@ You are an expert code editor. Given the following original code and an updated 
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - **Preserve all original blank lines unless their removal is necessary to match the updated summary.**
 - **Pay special attention to the lines before and after the changes. Make sure to not add code that is already present in the original code.**
-- **Make sure to not remove any lines that are not mentioned in the updated summary.**
+- **Make sure to the context before and after the selected code, not remove any lines that are not mentioned in the updated summary.**
 - Pay close attention to the differences between the original summary and the edited summary, which reflects developer's intent of what the new code should be.
 - Output only the updated code, nothing else.
 
