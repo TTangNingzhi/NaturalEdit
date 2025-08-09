@@ -36,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Register command to update API Key
 	context.subscriptions.push(
-		vscode.commands.registerCommand('naturaledit.updateApiKey', async () => {
+		vscode.commands.registerCommand('pasta.updateApiKey', async () => {
 			await updateApiKey();
 		})
 	);

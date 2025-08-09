@@ -11,13 +11,13 @@ export function generateDevHtml(): string {
 <html>
   <head>
     <meta charset="UTF-8">
-    <title>NaturalEdit Webview (Dev)</title>
+    <title>PASTA Webview (Dev)</title>
   </head>
   <body>
-    <iframe id="naturaledit-iframe" src="http://localhost:5173" style="width:100vw;height:100vh;border:0"></iframe>
+    <iframe id="pasta-iframe" src="http://localhost:5173" style="width:100vw;height:100vh;border:0"></iframe>
     <script>
       const vscode = acquireVsCodeApi();
-      const iframe = document.getElementById('naturaledit-iframe');
+      const iframe = document.getElementById('pasta-iframe');
       window.addEventListener('message', e => {
         if (e.source === iframe?.contentWindow) {
           vscode.postMessage(e.data);
@@ -59,7 +59,7 @@ export function generateProdHtml(context: vscode.ExtensionContext, webview: vsco
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NaturalEdit Webview</title>
+    <title>PASTA Webview</title>
     <style>${cssContent}</style>
   </head>
   <body>

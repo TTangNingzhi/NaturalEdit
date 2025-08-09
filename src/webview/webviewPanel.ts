@@ -7,7 +7,7 @@ import { handleMessage } from './messageHandler';
  * Implements the WebviewViewProvider interface.
  */
 export class NaturalEditViewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'naturaledit.sidebarView';
+    public static readonly viewType = 'pasta.sidebarView';
 
     private _context: vscode.ExtensionContext;
 
@@ -46,7 +46,7 @@ export class NaturalEditViewProvider implements vscode.WebviewViewProvider {
 
         } catch (error) {
             vscode.window.showErrorMessage(
-                'NaturalEdit: Failed to initialize sidebar webview. ' + (error as Error).message
+                'PASTA: Failed to initialize sidebar webview. ' + (error as Error).message
             );
         }
     }

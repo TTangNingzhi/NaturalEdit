@@ -428,7 +428,7 @@ async function applyCodeChanges(
 
         // --- Save original code to a temp file before patching ---
         // Generate a unique temp file path
-        const tempFilePath = path.join(os.tmpdir(), `naturaledit_${uuidv4()}_${filename}`);
+        const tempFilePath = path.join(os.tmpdir(), `pasta_${uuidv4()}_${filename}`);
         // Write the original code to the temp file
         fs.writeFileSync(tempFilePath, document.getText(), 'utf8');
 

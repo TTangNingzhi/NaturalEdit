@@ -1,6 +1,6 @@
 {
-  "name": "naturaledit",
-  "displayName": "NaturalEdit",
+  "name": "pasta",
+  "displayName": "PASTA",
   "publisher": "sandwich-lab",
   "icon": "media/icon.png",
   "description": "Transform your code by editing natural language summaries",
@@ -21,26 +21,26 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "naturaledit-sidebar",
-          "title": "NaturalEdit",
+          "id": "pasta-sidebar",
+          "title": "PASTA",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "naturaledit-sidebar": [
+      "pasta-sidebar": [
         {
-          "id": "naturaledit.sidebarView",
-          "name": "NaturalEdit",
+          "id": "pasta.sidebarView",
+          "name": "PASTA",
           "type": "webview"
         }
       ]
     },
     "commands": [
       {
-        "command": "naturaledit.updateApiKey",
+        "command": "pasta.updateApiKey",
         "title": "Update OpenAI API Key",
-        "category": "NaturalEdit"
+        "category": "PASTA"
       }
     ]
   },
