@@ -28,7 +28,8 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
     onDeleteSection,
     headerHovered
 }) => {
-    const { metadata, title, concise, createdAt, lines } = section;
+    const { metadata, title, summaryData, createdAt, lines, oldSummaryData } = section;
+    const concise = summaryData.low_unstructured;
     const { filename } = metadata;
 
     const formatTime = (timestamp: number) => {
@@ -161,8 +162,8 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     fontSize: FONT_SIZE.SMALL,
                     marginTop: 0
                 }}>
-                    {section.oldSummaryData
-                        ? renderDiffedText(section.oldSummaryData.concise, concise)
+                    {oldSummaryData
+                        ? renderDiffedText(oldSummaryData.low_unstructured, concise)
                         : concise}
                 </div>
             )}

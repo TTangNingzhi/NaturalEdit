@@ -1,13 +1,13 @@
 import React from "react";
-import { SectionData, SummaryLevel } from "../types/sectionTypes.js";
+import { SectionData, DetailLevel, StructuredType } from "../types/sectionTypes.js";
 import { SPACING } from "../styles/constants.js";
 import SectionHeader from "./SectionHeader.js";
 import SectionBody from "./SectionBody.js";
 
 interface SectionProps {
     section: SectionData;
-    onLevelChange: (level: SummaryLevel) => void;
-    onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
+    onLevelChange: (detail: DetailLevel, structured: StructuredType) => void;
+    onEditPrompt: (detail: DetailLevel, structured: StructuredType, value: string) => void;
     collapsed: boolean;
     onToggle: () => void;
     onDeleteSection: () => void;

@@ -14,8 +14,12 @@ const SUMMARY_CODE_MAPPING_COLORS = [
     "#FFD6A5", // orange
     "#D0BFFF", // purple
     "#A3D3FF", // blue
-    "#FFDAC1",  // peach
+    "#FFDAC1", // peach
     "#FFFACD", // yellow
+    "#E0BBE4", // lavender
+    "#FEC8D8", // pastel rose
+    "#C7CEEA", // periwinkle
+    "#B5EAD7", // mint
 ];
 
 // Constants for code matching
@@ -332,7 +336,6 @@ async function handleGetSummary(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
-    console.log(message);
     // If present, use oldSummaryData from the message (for post-edit summary workflow)
     const oldSummaryData = message.oldSummaryData || undefined;
     // Use newCode from message if present, otherwise use current selection
@@ -359,7 +362,16 @@ async function handleGetSummary(
 
         // Use getSummaryWithReference if oldSummaryData is present, otherwise use getCodeSummary
         let summary;
-        if (oldSummaryData && oldSummaryData.title && oldSummaryData.concise && oldSummaryData.detailed && Array.isArray(oldSummaryData.bullets)) {
+        if (
+            oldSummaryData &&
+            oldSummaryData.title &&
+            typeof oldSummaryData.low_unstructured === "string" &&
+            typeof oldSummaryData.low_structured === "string" &&
+            typeof oldSummaryData.medium_unstructured === "string" &&
+            typeof oldSummaryData.medium_structured === "string" &&
+            typeof oldSummaryData.high_unstructured === "string" &&
+            typeof oldSummaryData.high_structured === "string"
+        ) {
             // Use originalCode from oldSummaryData context if available, else fallback to selectedText
             const originalCode = oldSummaryData.originalCode || selectedText;
             summary = await getSummaryWithReference(selectedText, originalCode, oldSummaryData, fileContext);
@@ -369,7 +381,6 @@ async function handleGetSummary(
 
         const filename = editor ? path.basename(editor.document.fileName) : '';
         const fullPath = editor?.document.fileName || '';
-        // const lines = editor ? `${editor.selection.start.line + 1}-${editor.selection.end.line + 1}` : '';
 
         // Determine lines and offset based on whether newCode is used
         let lines = '';
@@ -394,32 +405,36 @@ async function handleGetSummary(
             offset = editor.document.offsetAt(editor.selection.start);
         }
 
-        // Stage 2: Mapping concise summary
-        webviewContainer.webview.postMessage({
-            command: 'summaryProgress',
-            stage: 2,
-            stageText: 'Building mapping for concise summary...'
-        });
-        const conciseMappings = await buildSummaryMapping(selectedText, summary.concise);
-        console.log('conciseMappings', conciseMappings);
+        // Stage 2+: Build mapping for all 6 summary types (concurrent)
+        const mappingKeys = [
+            ["low", "unstructured"],
+            ["low", "structured"],
+            ["medium", "unstructured"],
+            ["medium", "structured"],
+            ["high", "unstructured"],
+            ["high", "structured"]
+        ] as const;
 
-        // Stage 3: Mapping detailed summary
+        // Only report progress once before all mappings
         webviewContainer.webview.postMessage({
             command: 'summaryProgress',
-            stage: 3,
-            stageText: 'Building mapping for detailed summary...'
+            stageText: 'Mapping all summaries...'
         });
-        const detailedMappings = await buildSummaryMapping(selectedText, summary.detailed);
-        console.log('detailedMappings', detailedMappings);
 
-        // Stage 4: Mapping bullet points
-        webviewContainer.webview.postMessage({
-            command: 'summaryProgress',
-            stage: 4,
-            stageText: 'Building mapping for bullet points...'
+        // Run all mappings concurrently
+        const mappingPromises = mappingKeys.map(([detail, structured]) => {
+            const key = `${detail}_${structured}` as keyof typeof summary;
+            const summaryText = (summary as any)[key] || "";
+            return buildSummaryMapping(selectedText, summaryText);
         });
-        const bulletsMappings = await buildSummaryMapping(selectedText, summary.bullets.join(" "));
-        console.log('bulletsMappings', bulletsMappings);
+        const mappingResults = await Promise.all(mappingPromises);
+
+        // Assemble summaryMappings object
+        const summaryMappings: Record<string, any[]> = {};
+        mappingKeys.forEach(([detail, structured], idx) => {
+            const key = `${detail}_${structured}` as keyof typeof summary;
+            summaryMappings[key] = mappingResults[idx];
+        });
 
         // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({
@@ -429,17 +444,10 @@ async function handleGetSummary(
             fullPath,
             lines,
             title: summary.title,
-            concise: summary.concise,
             createdAt: new Date().toLocaleString(),
             originalCode: selectedText,
-            // offset: editor ? editor.document.offsetAt(editor.selection.start) : 0,
             offset,
-            summaryMappings: {
-                concise: conciseMappings,
-                detailed: detailedMappings,
-                bullets: bulletsMappings
-            },
-            // Pass oldSummaryData if present (for diffed rendering in frontend)
+            summaryMappings,
             ...(oldSummaryData ? { oldSummaryData } : {})
         });
     } catch (err: any) {
@@ -460,14 +468,13 @@ async function handlePromptToSummary(
 ) {
     // Call the LLM to update the summary based on the direct prompt
     const updatedSummary = await getSummaryFromInstruction(
-        "", // No code context needed for summary update
-        message.summaryText,
-        message.summaryLevel,
+        message.originalCode,
+        message.originalSummary,
         message.promptText
     );
     console.log('promptToSummary:', {
-        summaryText: message.summaryText,
-        summaryLevel: message.summaryLevel,
+        originalCode: message.originalCode,
+        originalSummary: message.originalSummary,
         promptText: message.promptText,
         updatedSummary
     });
@@ -504,7 +511,8 @@ async function handleSummaryPrompt(
     const newCode = await getCodeFromSummaryEdit(
         originalCode,
         message.summaryText,
-        message.summaryLevel,
+        message.detailLevel,
+        message.structuredType,
         fileContext,
         message.originalSummary
     );

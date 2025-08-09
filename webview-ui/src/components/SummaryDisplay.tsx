@@ -1,21 +1,20 @@
 import React from "react";
-import { VSCodeRadioGroup, VSCodeRadio } from "@vscode/webview-ui-toolkit/react/index.js";
-import { SummaryData, SummaryLevel, SummaryCodeMapping } from "../types/sectionTypes.js";
+import { SummaryData, DetailLevel, StructuredType, SummaryCodeMapping } from "../types/sectionTypes.js";
 import { FONT_SIZE, COLORS, SPACING, BORDER_RADIUS, COMMON_STYLES } from "../styles/constants.js";
 import { renderDiffedTextWithMapping } from "../utils/diffRender";
+import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react";
 
 /**
  * Props for the SummaryDisplay component
  */
 interface SummaryDisplayProps {
     summary: SummaryData;
-    selectedLevel: SummaryLevel;
-    onLevelChange: (level: SummaryLevel) => void;
-    onEditPrompt: (level: SummaryLevel, value: string | string[]) => void;
+    selectedDetailLevel: DetailLevel;
+    selectedStructured: StructuredType;
+    onLevelChange: (detail: DetailLevel, structured: StructuredType) => void;
+    onEditPrompt: (detail: DetailLevel, structured: StructuredType, value: string) => void;
     summaryMappings?: {
-        concise?: SummaryCodeMapping[];
-        detailed?: SummaryCodeMapping[];
-        bullets?: SummaryCodeMapping[];
+        [key: string]: SummaryCodeMapping[];
     };
     activeMappingIndex?: number | null;
     onMappingHover?: (index: number | null) => void;
@@ -31,7 +30,8 @@ interface SummaryDisplayProps {
  */
 const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
     summary,
-    selectedLevel,
+    selectedDetailLevel,
+    selectedStructured,
     onLevelChange,
     onEditPrompt,
     summaryMappings = {},
@@ -39,39 +39,63 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
     onMappingHover,
     oldSummaryData
 }) => {
-    // Get the value for the selected summary level
-    const getSummaryValue = (level: SummaryLevel) => {
-        if (level === "concise") return summary.concise;
-        if (level === "detailed") return summary.detailed;
-        if (level === "bullets") return summary.bullets.join("\n");
-        return "";
-    };
+    // Get the value for the selected summary type
+    const getSummaryKey = (detail: DetailLevel, structured: StructuredType) =>
+        `${detail}_${structured}` as keyof SummaryData;
+
+    const getSummaryValue = (detail: DetailLevel, structured: StructuredType) =>
+        summary[getSummaryKey(detail, structured)] || "";
 
     // Handle "Edit In Prompt" button click
     const handleEdit = () => {
-        onEditPrompt(selectedLevel, getSummaryValue(selectedLevel));
+        onEditPrompt(selectedDetailLevel, selectedStructured, getSummaryValue(selectedDetailLevel, selectedStructured));
     };
+
+    // Slider values and labels
+    const detailLevels: DetailLevel[] = ["low", "medium", "high"];
+
+    // Mapping key for summaryMappings
+    const mappingKey = getSummaryKey(selectedDetailLevel, selectedStructured);
 
     return (
         <div style={COMMON_STYLES.SECTION_COMPACT}>
-            {/* Option row: options left, edit button right */}
+            {/* Option row: slider and toggle left, edit button right */}
             <div style={COMMON_STYLES.SECTION_HEADER}>
-                <VSCodeRadioGroup
-                    orientation="horizontal"
-                    value={selectedLevel}
-                    onChange={(e: unknown) => {
-                        const value = ((e as Event).target as HTMLInputElement).value as SummaryLevel;
-                        onLevelChange(value);
-                    }}
-                    style={{
-                        marginBottom: SPACING.MINUS_TINY,
-                        marginTop: SPACING.MINUS_TINY
-                    }}
-                >
-                    <VSCodeRadio value="concise">Concise</VSCodeRadio>
-                    <VSCodeRadio value="detailed">Detailed</VSCodeRadio>
-                    <VSCodeRadio value="bullets">Bulleted</VSCodeRadio>
-                </VSCodeRadioGroup>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {/* Structured toggle */}
+                    <VSCodeCheckbox
+                        className="small-checkbox"
+                        checked={selectedStructured === "structured"}
+                        onChange={e => {
+                            const checked = (e.target as HTMLInputElement).checked;
+                            onLevelChange(
+                                selectedDetailLevel,
+                                checked ? "structured" : "unstructured"
+                            );
+                        }}
+                        aria-label="Structured"
+                    >
+                        Structured
+                    </VSCodeCheckbox>
+                    {/* Detail label and slider as a group */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {/* Use theme color for label */}
+                        <span style={{ fontSize: "13px", color: COLORS.DESCRIPTION }}>Granularity</span>
+                        <input
+                            type="range"
+                            min={0}
+                            max={2}
+                            step={1}
+                            value={detailLevels.indexOf(selectedDetailLevel)}
+                            onChange={e => {
+                                const idx = Number(e.target.value);
+                                onLevelChange(detailLevels[idx], selectedStructured);
+                            }}
+                            className="themed-slider"
+                            aria-label="Detail Level"
+                        />
+                    </div>
+                </div>
                 <button
                     style={COMMON_STYLES.ICON_BUTTON}
                     aria-label="Edit In Prompt"
@@ -93,7 +117,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                 <div style={{ flex: 1 }}>
                     <pre style={{
                         margin: 0,
-                        whiteSpace: "pre-line",
+                        whiteSpace: "pre-wrap",
                         fontFamily: "var(--vscode-font-family)",
                         fontSize: FONT_SIZE.BODY,
                         color: COLORS.FOREGROUND,
@@ -101,40 +125,14 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                         background: "none",
                         border: "none"
                     }}>
-                        {selectedLevel === "concise" &&
-                            renderDiffedTextWithMapping(
-                                oldSummaryData && oldSummaryData.concise !== undefined
-                                    ? oldSummaryData.concise
-                                    : summary.concise || "",
-                                summary.concise || "",
-                                summaryMappings.concise || [],
-                                activeMappingIndex,
-                                onMappingHover
-                            )
-                        }
-                        {selectedLevel === "detailed" &&
-                            renderDiffedTextWithMapping(
-                                oldSummaryData && oldSummaryData.detailed !== undefined
-                                    ? oldSummaryData.detailed
-                                    : summary.detailed || "",
-                                summary.detailed || "",
-                                summaryMappings.detailed || [],
-                                activeMappingIndex,
-                                onMappingHover
-                            )
-                        }
-                        {selectedLevel === "bullets" && (
-                            summary.bullets.length > 0
-                                ? renderDiffedTextWithMapping(
-                                    oldSummaryData && oldSummaryData.bullets !== undefined
-                                        ? (oldSummaryData.bullets || []).join("\n")
-                                        : summary.bullets.join("\n"),
-                                    summary.bullets.join("\n"),
-                                    summaryMappings.bullets || [],
-                                    activeMappingIndex,
-                                    onMappingHover
-                                )
-                                : <span style={{ color: COLORS.DESCRIPTION }}>Bulleted summary...</span>
+                        {renderDiffedTextWithMapping(
+                            oldSummaryData && oldSummaryData[getSummaryKey(selectedDetailLevel, selectedStructured)] !== undefined
+                                ? oldSummaryData[getSummaryKey(selectedDetailLevel, selectedStructured)] as string
+                                : getSummaryValue(selectedDetailLevel, selectedStructured),
+                            getSummaryValue(selectedDetailLevel, selectedStructured),
+                            summaryMappings[mappingKey] || [],
+                            activeMappingIndex,
+                            onMappingHover
                         )}
                     </pre>
                 </div>
