@@ -75,8 +75,8 @@ export const setupMessageHandler = (
                         createdAt: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
                         summaryData: msg.data,
                         oldSummaryData: msg.oldSummaryData,
-                        // Selection state, default to low/unstructured
-                        selectedDetailLevel: "low",
+                        // Selection state, default to medium/unstructured
+                        selectedDetailLevel: "medium",
                         selectedStructured: "unstructured",
                         editPromptDetailLevel: null,
                         editPromptStructured: null,
