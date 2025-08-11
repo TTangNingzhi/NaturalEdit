@@ -110,9 +110,9 @@ async function callLLM(prompt: string, parseJson: boolean = false): Promise<any>
             'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-            model: 'gpt-4o',
+            model: 'gpt-4.1',
             messages: [
-                { role: 'system', content: 'You are a helpful assistant.' },
+                { role: 'system', content: 'You are a helpful progrmaming assistant.' },
                 { role: 'user', content: prompt }
             ],
             temperature: 0.3,
@@ -152,7 +152,7 @@ export async function getCodeSummary(code: string, fileContext: string): Promise
     high_structured: string;
 }> {
     const prompt = `
-You are an expert code summarizer. For the following code, generate 6 summaries, one for each combination of detail level (low, medium, high) and structure (unstructured/paragraph, structured/bulleted):
+You are an expert code summarizer. For the following code, generate 6 summaries, one for each combination of detail level (low, medium, high) and structure (unstructured, i.e., paragraph, structured, i.e., bulleted):
 - low_unstructured: One-sentence, low-detail, paragraph style.
 - low_structured: 2-3 short bullet points, low-detail, as a single string. Each bullet must start with "•" and be separated by \\n. Never return an array.
 - medium_unstructured: 2-3 sentences, medium-detail, paragraph style.
@@ -220,14 +220,10 @@ export async function getSummaryWithReference(
 You are an expert code summarizer. Your task is to generate a new summary for the MODIFIED code below, using the original code and its previous summary as reference.
 
 Instructions:
-- The new summary should be as close as possible to the old summary, only updating the parts that are affected by the code change.
-- If a part of the summary is still accurate for the new code, keep it unchanged.
-- If a part of the summary is no longer accurate, update only that part to reflect the new code.
-- Do NOT add unnecessary changes or rephrase unchanged parts.
-- Your summary MUST focus on the code differences between the original and modified code, and clearly reflect those changes in the summary, even if the changes are only in inline comments.
-- If possible, make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update).
-- For all structured (bulleted) summaries, return as a single string. Each bullet must start with "•" and be separated by \\n. ENCOURAGE the use of two-level bullets (use "◦" for the second level) for medium_structured and high_structured when logical groupings exist. Never return an array.
-- For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦".
+- Your new summary MUST focus on the code differences (addition, deletion) between the original and modified code and clearly reflect those changes, even if they are small, such as inline comments.
+- Make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update). I mean, do not describe the change itself, but instead, seamlessly integrate the changes into the new summary.
+- The new summary should be close to the old summary, only updating the parts that are affected by the code change:  If a part of the summary is still accurate for the new code, keep it unchanged; If a part of the summary is no longer accurate, change only that part to reflect the new code. Do not add unnecessary changes or rephrase unchanged parts.
+- For all structured (bulleted) summaries, return as a single string. Each bullet must start with "•" and be separated by \\n. For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦". Never return an array.
 - Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
 
 File Context (for reference only):
@@ -455,7 +451,7 @@ ${originalCode}
 Original summary:
 ${originalSummary}
 
-Developer's instruction (integrate this intent fully into the updated summary):
+Developer's instruction (integrate this intent FULLY into the updated summary):
 ${instruction}
 
 Updated summary:
