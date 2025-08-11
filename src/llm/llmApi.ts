@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
-import fetch from "node-fetch";
+import * as vscode from 'vscode';
+import fetch from 'node-fetch';
 
 /**
  * LLM API utility functions for code summarization and editing.
@@ -13,7 +13,7 @@ let extensionContext: vscode.ExtensionContext | undefined;
  * @param context Extension context
  */
 export function initialize(context: vscode.ExtensionContext) {
-  extensionContext = context;
+    extensionContext = context;
 }
 
 // Remove all code block markers (e.g., ``` or ```python) from LLM output.
@@ -21,8 +21,8 @@ export function initialize(context: vscode.ExtensionContext) {
 // content: The string returned by the LLM
 // returns: Cleaned string with all code block markers removed
 function cleanLLMCodeBlock(content: string): string {
-  // Remove all lines that start with ```
-  return content.replace(/^```[^\n]*\n|^```$/gm, "").trim();
+    // Remove all lines that start with ```
+    return content.replace(/^```[^\n]*\n|^```$/gm, "").trim();
 }
 
 /**
@@ -31,33 +31,31 @@ function cleanLLMCodeBlock(content: string): string {
  * @returns Promise resolving to true if key was updated, false if cancelled
  */
 export async function updateApiKey(): Promise<boolean> {
-  if (!extensionContext) {
-    throw new Error(
-      "Extension context not initialized. Call initialize() first."
-    );
-  }
+    if (!extensionContext) {
+        throw new Error('Extension context not initialized. Call initialize() first.');
+    }
 
-  const apiKey = await vscode.window.showInputBox({
-    prompt: "Enter your OpenAI API Key. The key will be stored locally only.",
-    placeHolder: "sk-...",
-    password: true,
-    ignoreFocusOut: true,
-    title: "Update OpenAI API Key",
-    validateInput: (value: string) => {
-      if (!value.startsWith("sk-")) {
-        return 'API Key must start with "sk-"';
-      }
-      return null;
-    },
-  });
+    const apiKey = await vscode.window.showInputBox({
+        prompt: 'Enter your OpenAI API Key. The key will be stored locally only.',
+        placeHolder: 'sk-...',
+        password: true,
+        ignoreFocusOut: true,
+        title: 'Update OpenAI API Key',
+        validateInput: (value: string) => {
+            if (!value.startsWith('sk-')) {
+                return 'API Key must start with "sk-"';
+            }
+            return null;
+        }
+    });
 
-  if (!apiKey) {
-    return false;
-  }
+    if (!apiKey) {
+        return false;
+    }
 
-  await extensionContext.globalState.update("openaiApiKey", apiKey);
-  vscode.window.showInformationMessage("OpenAI API Key updated successfully!");
-  return true;
+    await extensionContext.globalState.update('openaiApiKey', apiKey);
+    vscode.window.showInformationMessage('OpenAI API Key updated successfully!');
+    return true;
 }
 
 /**
@@ -68,29 +66,27 @@ export async function updateApiKey(): Promise<boolean> {
  * @returns Promise resolving to API Key
  */
 async function getApiKey(): Promise<string> {
-  if (!extensionContext) {
-    throw new Error(
-      "Extension context not initialized. Call initialize() first."
-    );
-  }
-
-  // First try environment variable
-  // const envApiKey = process.env.OPENAI_API_KEY;
-  // if (envApiKey) {
-  //     console.log('Using environment variable for OpenAI API Key');
-  //     return envApiKey;
-  // }
-
-  // Try global state first, if not found, keep prompting until user enters a valid key
-  while (true) {
-    const key = extensionContext.globalState.get<string>("openaiApiKey");
-    if (key) {
-      return key;
+    if (!extensionContext) {
+        throw new Error('Extension context not initialized. Call initialize() first.');
     }
-    if (!(await updateApiKey())) {
-      throw new Error("OpenAI API key is required to use this extension.");
+
+    // First try environment variable
+    // const envApiKey = process.env.OPENAI_API_KEY;
+    // if (envApiKey) {
+    //     console.log('Using environment variable for OpenAI API Key');
+    //     return envApiKey;
+    // }
+
+    // Try global state first, if not found, keep prompting until user enters a valid key
+    while (true) {
+        const key = extensionContext.globalState.get<string>('openaiApiKey');
+        if (key) {
+            return key;
+        }
+        if (!await updateApiKey()) {
+            throw new Error('OpenAI API key is required to use this extension.');
+        }
     }
-  }
 }
 
 /**
@@ -99,50 +95,45 @@ async function getApiKey(): Promise<string> {
  * @param parseJson Whether to parse the response as JSON
  * @returns The LLM response
  */
-async function callLLM(
-  prompt: string,
-  parseJson: boolean = false
-): Promise<any> {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error(
-      "OpenAI API key not found. Please set it in environment variables or enter it when prompted."
-    );
-  }
-
-  const endpoint = "https://api.openai.com/v1/chat/completions";
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a helpful assistant." },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.3,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("OpenAI API error: " + response.statusText);
-  }
-  const data = (await response.json()) as any;
-  const content = data.choices?.[0]?.message?.content || "";
-
-  if (parseJson) {
-    const cleaned = cleanLLMCodeBlock(content);
-    try {
-      return JSON.parse(cleaned);
-    } catch (e) {
-      throw new Error("Failed to parse LLM response as JSON: " + cleaned);
+async function callLLM(prompt: string, parseJson: boolean = false): Promise<any> {
+    const apiKey = await getApiKey();
+    if (!apiKey) {
+        throw new Error('OpenAI API key not found. Please set it in environment variables or enter it when prompted.');
     }
-  }
-  return content;
+
+    const endpoint = 'https://api.openai.com/v1/chat/completions';
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: 'gpt-4.1',
+            messages: [
+                { role: 'system', content: 'You are a helpful progrmaming assistant.' },
+                { role: 'user', content: prompt }
+            ],
+            temperature: 0.3,
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error('OpenAI API error: ' + response.statusText);
+    }
+    const data = await response.json() as any;
+    const content = data.choices?.[0]?.message?.content || '';
+
+    if (parseJson) {
+        const cleaned = cleanLLMCodeBlock(content);
+        try {
+            return JSON.parse(cleaned);
+        } catch (e) {
+            throw new Error('Failed to parse LLM response as JSON: ' + cleaned);
+        }
+    }
+    return content;
 }
 
 /**
@@ -151,26 +142,29 @@ async function callLLM(
  * @param fileContext The file context where the code is located
  * @returns Object containing title, concise, detailed, and bulleted summaries
  */
-export async function getCodeSummary(
-  code: string,
-  fileContext: string
-): Promise<{
-  title: string;
-  concise: string;
-  detailed: string;
-  bullets: string[];
+export async function getCodeSummary(code: string, fileContext: string): Promise<{
+    title: string;
+    low_unstructured: string;
+    low_structured: string;
+    medium_unstructured: string;
+    medium_structured: string;
+    high_unstructured: string;
+    high_structured: string;
 }> {
-  const prompt = `
-You are an expert code summarizer. For the following code, generate a summary in four levels:
-1. Title: 3-5 words, no more.
-2. Concise: One-sentence summary.
-3. Detailed: One detailed sentence.
-4. Bulleted: up to 6 bullet points (could be less), each concise. Each bullet in the bullets array must start with a bullet character (•).
+    const prompt = `
+You are an expert code summarizer. For the following code, generate 6 summaries, one for each combination of detail level (low, medium, high) and structure (unstructured, i.e., paragraph, structured, i.e., bulleted):
+- low_unstructured: One-sentence, low-detail, paragraph style.
+- low_structured: 2-3 short bullet points, low-detail, as a single string. Each bullet must start with "•" and be separated by \\n. Never return an array.
+- medium_unstructured: 2-3 sentences, medium-detail, paragraph style.
+- medium_structured: 3-5 bullet points, medium-detail, as a single string. Use "•" for first-level bullets, and ENCOURAGE the use of two-level bullets (use "◦" for the second level, and indent the second-level bullet with 2 spaces before the "◦") when logical groupings exist. Bullets must be separated by \\n. Never return an array.
+- high_unstructured: 3-4 sentences, high-detail, paragraph style.
+- high_structured: 4-8 bullet points, high-detail, as a single string. Use "•" for first-level bullets, and ENCOURAGE the use of two-level bullets (use "◦" for the second level, and indent the second-level bullet with 2 spaces before the "◦") when logical groupings exist. Bullets must be separated by \\n. Never return an array.
 
 IMPORTANT:
+- For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦".
 - The file context below is provided ONLY for reference to help understand the code's environment.
 - Your summary MUST focus ONLY on the specific code snippet provided.
-- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
+- Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
 
 File Context (for reference only):
 ${fileContext}
@@ -179,13 +173,16 @@ Code to summarize:
 ${code}
 `;
 
-  const parsed = await callLLM(prompt, true);
-  return {
-    title: parsed.title || "",
-    concise: parsed.concise || "",
-    detailed: parsed.detailed || "",
-    bullets: Array.isArray(parsed.bullets) ? parsed.bullets : [],
-  };
+    const parsed = await callLLM(prompt, true);
+    return {
+        title: parsed.title || '',
+        low_unstructured: parsed.low_unstructured || '',
+        low_structured: parsed.low_structured || '',
+        medium_unstructured: parsed.medium_unstructured || '',
+        medium_structured: parsed.medium_structured || '',
+        high_unstructured: parsed.high_unstructured || '',
+        high_structured: parsed.high_structured || '',
+    };
 }
 
 /**
@@ -198,32 +195,36 @@ ${code}
  * @returns Object containing title, concise, detailed, and bulleted summaries
  */
 export async function getSummaryWithReference(
-  newCode: string,
-  originalCode: string,
-  oldSummary: {
-    title: string;
-    concise: string;
-    detailed: string;
-    bullets: string[];
-  },
-  fileContext: string
+    newCode: string,
+    originalCode: string,
+    oldSummary: {
+        title: string;
+        low_unstructured: string;
+        low_structured: string;
+        medium_unstructured: string;
+        medium_structured: string;
+        high_unstructured: string;
+        high_structured: string;
+    },
+    fileContext: string
 ): Promise<{
-  title: string;
-  concise: string;
-  detailed: string;
-  bullets: string[];
+    title: string;
+    low_unstructured: string;
+    low_structured: string;
+    medium_unstructured: string;
+    medium_structured: string;
+    high_unstructured: string;
+    high_structured: string;
 }> {
-  const prompt = `
+    const prompt = `
 You are an expert code summarizer. Your task is to generate a new summary for the MODIFIED code below, using the original code and its previous summary as reference.
 
 Instructions:
-- The new summary should be as close as possible to the old summary, only updating the parts that are affected by the code change.
-- If a part of the summary is still accurate for the new code, keep it unchanged.
-- If a part of the summary is no longer accurate, update only that part to reflect the new code.
-- Do NOT add unnecessary changes or rephrase unchanged parts.
-- Your summary MUST focus on the code differences between the original and modified code, and clearly reflect those changes in the summary, even if the changes are only in inline comments.
-- If possible, make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update).
-- Return your response as a JSON object with keys: title, concise, detailed, bullets (bullets is an array of strings).
+- Your new summary MUST focus on the code differences (addition, deletion) between the original and modified code and clearly reflect those changes, even if they are small, such as inline comments.
+- Make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update). I mean, do not describe the change itself, but instead, seamlessly integrate the changes into the new summary.
+- The new summary should be close to the old summary, only updating the parts that are affected by the code change:  If a part of the summary is still accurate for the new code, keep it unchanged; If a part of the summary is no longer accurate, change only that part to reflect the new code. Do not add unnecessary changes or rephrase unchanged parts.
+- For all structured (bulleted) summaries, return as a single string. Each bullet must start with "•" and be separated by \\n. For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦". Never return an array.
+- Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
 
 File Context (for reference only):
 ${fileContext}
@@ -234,22 +235,28 @@ ${originalCode}
 Old summary:
 {
   "title": "${oldSummary.title}",
-  "concise": "${oldSummary.concise}",
-  "detailed": "${oldSummary.detailed}",
-  "bullets": ${JSON.stringify(oldSummary.bullets)}
+  "low_unstructured": "${oldSummary.low_unstructured}",
+  "low_structured": "${oldSummary.low_structured}",
+  "medium_unstructured": "${oldSummary.medium_unstructured}",
+  "medium_structured": "${oldSummary.medium_structured}",
+  "high_unstructured": "${oldSummary.high_unstructured}",
+  "high_structured": "${oldSummary.high_structured}"
 }
 
 MODIFIED code:
 ${newCode}
 `;
 
-  const parsed = await callLLM(prompt, true);
-  return {
-    title: parsed.title || "",
-    concise: parsed.concise || "",
-    detailed: parsed.detailed || "",
-    bullets: Array.isArray(parsed.bullets) ? parsed.bullets : [],
-  };
+    const parsed = await callLLM(prompt, true);
+    return {
+        title: parsed.title || '',
+        low_unstructured: parsed.low_unstructured || '',
+        low_structured: parsed.low_structured || '',
+        medium_unstructured: parsed.medium_unstructured || '',
+        medium_structured: parsed.medium_structured || '',
+        high_unstructured: parsed.high_unstructured || '',
+        high_structured: parsed.high_structured || '',
+    };
 }
 
 /**
@@ -259,17 +266,17 @@ ${newCode}
  * @param summaryText The summary text (concise, detailed, or a bullet)
  */
 export async function buildSummaryMapping(
-  code: string,
-  summaryText: string
+    code: string,
+    summaryText: string
 ): Promise<
-  {
-    summaryComponent: string;
-    codeRanges: [number, number][];
-  }[]
+    {
+        summaryComponent: string;
+        codeRanges: [number, number][];
+    }[]
 > {
-  // The prompt now explicitly requires that each summaryComponent must be a substring of the summary.
-  const prompt = `
-You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 7 key summary components (phrases or semantic units) from the summary.
+    // The prompt now explicitly requires that each summaryComponent must be a substring of the summary.
+    const prompt = `
+You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 10 key summary components (phrases or semantic units) from the summary.
 IMPORTANT:
 1. Each summaryComponent you extract MUST be a substring (exact part) of the summary text below.
 2. Extract summaryComponents in the exact order they appear in the summary text.
@@ -295,39 +302,39 @@ Summary:
 ${summaryText}
 `;
 
-  const raw = await callLLM(prompt, false);
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e1) {
-    // Try cleaning code block markers and parse again
-    const cleaned = cleanLLMCodeBlock(raw);
+    const raw = await callLLM(prompt, false);
+    let parsed;
     try {
-      parsed = JSON.parse(cleaned);
-    } catch (e2) {
-      throw new Error("Failed to parse LLM response as JSON: " + cleaned);
+        parsed = JSON.parse(raw);
+    } catch (e1) {
+        // Try cleaning code block markers and parse again
+        const cleaned = cleanLLMCodeBlock(raw);
+        try {
+            parsed = JSON.parse(cleaned);
+        } catch (e2) {
+            throw new Error('Failed to parse LLM response as JSON: ' + cleaned);
+        }
     }
-  }
 
-  // Post-processing: filter and log any summaryComponent that is not a substring of the summaryText
-  if (Array.isArray(parsed)) {
-    const filtered = parsed.filter((item) => {
-      if (
-        typeof item.summaryComponent === "string" &&
-        !summaryText.includes(item.summaryComponent)
-      ) {
-        // Log a warning if hallucinated summaryComponent is found
-        console.warn(
-          `[buildSummaryMapping] summaryComponent not found in summary:`,
-          item.summaryComponent
-        );
-        return false;
-      }
-      return true;
-    });
-    return filtered;
-  }
-  return [];
+    // Post-processing: filter and log any summaryComponent that is not a substring of the summaryText
+    if (Array.isArray(parsed)) {
+        const filtered = parsed.filter((item) => {
+            if (
+                typeof item.summaryComponent === "string" &&
+                !summaryText.includes(item.summaryComponent)
+            ) {
+                // Log a warning if hallucinated summaryComponent is found
+                console.warn(
+                    `[buildSummaryMapping] summaryComponent not found in summary:`,
+                    item.summaryComponent
+                );
+                return false;
+            }
+            return true;
+        });
+        return filtered;
+    }
+    return [];
 }
 
 /**
@@ -340,20 +347,18 @@ ${summaryText}
  * @returns The modified code
  */
 export async function getCodeFromSummaryEdit(
-  originalCode: string,
-  editedSummary: string,
-  summaryLevel: string,
-  fileContext: string,
-  originalSummary: string
+    originalCode: string,
+    editedSummary: string,
+    detailLevel: string,
+    structuredType: string,
+    fileContext: string,
+    originalSummary: string
 ): Promise<string> {
-  const prompt = `
-You are an expert code editor. Given the following original code and an updated summary (${summaryLevel}), update the code to reflect the changes in the new summary.
+    const prompt = `
+You are an expert code editor. Given the following original code and an updated summary (detail level: ${detailLevel}, structure: ${structuredType}), update the code to reflect the changes in the new summary.
 - The file context below is provided ONLY for reference to help understand the code's environment, and your code changes MUST focus ONLY on the specific code snippet provided.
 - Only change the code as needed to match the new summary, and keep the rest of the code unchanged.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
-- **Preserve all original blank lines unless their removal is necessary to match the updated summary.**
-- **Pay special attention to the lines before and after the changes. Make sure to not add code that is already present in the original code.**
-- **Make sure to the context before and after the selected code, not remove any lines that are not mentioned in the updated summary.**
 - Pay close attention to the differences between the original summary and the edited summary, which reflects developer's intent of what the new code should be.
 - Output only the updated code, nothing else.
 
@@ -363,17 +368,17 @@ ${fileContext}
 Original code:
 ${originalCode}
 
-Original summary (${summaryLevel}):
+Original summary (detail level: ${detailLevel}, structure: ${structuredType}):
 ${originalSummary}
 
-Updated summary (${summaryLevel}):
+Updated summary (detail level: ${detailLevel}, structure: ${structuredType}):
 ${editedSummary}
 
 Updated code:
 `;
 
-  const content = await callLLM(prompt);
-  return cleanLLMCodeBlock(content);
+    const content = await callLLM(prompt);
+    return cleanLLMCodeBlock(content);
 }
 
 /**
@@ -384,19 +389,15 @@ Updated code:
  * @returns The modified code
  */
 export async function getCodeFromDirectInstruction(
-  originalCode: string,
-  instruction: string,
-  fileContext: string
+    originalCode: string,
+    instruction: string,
+    fileContext: string
 ): Promise<string> {
-  const prompt = `
+    const prompt = `
 You are an expert code editor. Given the following original code and a direct instruction, update the code to fulfill the instruction.
 - The file context below is provided ONLY for reference to help understand the code's environment, and your code changes MUST focus ONLY on the specific code snippet provided.
 - Only change the code as needed to satisfy the instruction, and keep the rest of the code unchanged.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
-- **Preserve all original blank lines unless their removal is necessary to match the updated summary.**
-- **Pay special attention to the lines before and after the changes. Make sure to not add code that is already present in the original code.**
-- **Make sure to not remove any lines that are not mentioned in the updated summary.**
-- Pay close attention to the differences between the original summary and the edited summary, which reflects developer's intent of what the new code should be.
 - Output only the updated code, nothing else.
 
 File Context (for reference only):
@@ -411,8 +412,8 @@ ${instruction}
 Updated code:
 `;
 
-  const content = await callLLM(prompt);
-  return cleanLLMCodeBlock(content);
+    const content = await callLLM(prompt);
+    return cleanLLMCodeBlock(content);
 }
 
 /**
@@ -424,12 +425,11 @@ Updated code:
  * @returns The modified summary
  */
 export async function getSummaryFromInstruction(
-  originalCode: string,
-  originalSummary: string,
-  summaryLevel: string,
-  instruction: string
+    originalCode: string,
+    originalSummary: string,
+    instruction: string
 ): Promise<string> {
-  const prompt = `
+    const prompt = `
 You are an expert at editing code summaries. In this scenario, a developer is using a summary-mediated approach to modify code:
 1. Instead of directly editing the code, the developer modifies the summary to express their desired code behavior.
 2. The modified summary will later be used to generate the actual code changes.
@@ -448,15 +448,15 @@ Given the following original summary and a direct instruction, update the summar
 Code Context (for reference only):
 ${originalCode}
 
-Original summary (${summaryLevel}):
+Original summary:
 ${originalSummary}
 
-Developer's instruction (integrate this intent fully into the updated summary):
+Developer's instruction (integrate this intent FULLY into the updated summary):
 ${instruction}
 
 Updated summary:
 `;
 
-  const content = await callLLM(prompt);
-  return cleanLLMCodeBlock(content);
+    const content = await callLLM(prompt);
+    return cleanLLMCodeBlock(content);
 }
