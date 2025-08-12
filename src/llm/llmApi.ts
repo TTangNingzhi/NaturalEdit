@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import fetch from 'node-fetch';
+import { logInteraction } from '../utils/telemetry';
 
 /**
  * LLM API utility functions for code summarization and editing.
@@ -159,6 +160,10 @@ ${code}
 `;
 
     const content = await callLLM(prompt, false);
+    logInteraction("summarize_selected_code", {
+        selected_code: code,
+        summary: content
+    });
     return cleanLLMCodeBlock(content);
 }
 
@@ -201,6 +206,12 @@ Updated code:
 `;
 
     const content = await callLLM(prompt);
+    logInteraction("modify_summary_mediation", {
+        original_code: originalCode,
+        original_summary: originalSummary,
+        edited_summary: editedSummary,
+        updated_code: cleanLLMCodeBlock(content)
+    });
     return cleanLLMCodeBlock(content);
 }
 
@@ -236,5 +247,10 @@ Updated code:
 `;
 
     const content = await callLLM(prompt);
+    logInteraction("modify_direct_instruction", {
+        original_code: originalCode,
+        instruction,
+        updated_code: cleanLLMCodeBlock(content)
+    });
     return cleanLLMCodeBlock(content);
 }

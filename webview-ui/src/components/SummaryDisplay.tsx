@@ -1,5 +1,6 @@
 import React from "react";
 import { FONT_SIZE, COLORS, SPACING, BORDER_RADIUS, COMMON_STYLES } from "../styles/constants.js";
+import { logInteraction } from "../utils/telemetry";
 
 /**
  * Props for the SummaryDisplay component (baseline: only a string summary)
@@ -24,7 +25,12 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, onEditSummary 
                     style={COMMON_STYLES.ICON_BUTTON}
                     aria-label="Edit In Prompt"
                     title="Edit In Prompt"
-                    onClick={() => onEditSummary && onEditSummary(summary)}
+                    onClick={() => {
+                        logInteraction("click_edit_in_prompt", { summary });
+                        if (onEditSummary) {
+                            onEditSummary(summary);
+                        }
+                    }}
                 >
                     <span className="codicon codicon-edit" style={{ fontSize: FONT_SIZE.ICON }} />
                 </button>

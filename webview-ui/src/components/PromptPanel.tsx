@@ -7,6 +7,7 @@ import { SectionData } from "../types/sectionTypes.js";
 import { FONT_SIZE, SPACING, COMMON_STYLES, COLORS } from "../styles/constants.js";
 import { usePrompt } from "../hooks/usePrompt.js";
 import { ClipLoader } from "react-spinners";
+import { logInteraction } from "../utils/telemetry";
 
 interface PromptPanelProps {
     section: SectionData;
@@ -63,6 +64,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
 
     // Direct prompt send
     const handleDirectPromptSend = async () => {
+        logInteraction("commit_direct_instruction", { instruction: directPrompt });
         const action = "prompt1";
         if (directPrompt.trim()) {
             setLoading(prev => ({ ...prev, [action]: true }));
@@ -84,6 +86,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
 
     // Commit summary to backend (only detailed)
     const handleSummaryCommit = async () => {
+        logInteraction("commit_modified_summary", { edited_summary: currentSummary, original_summary: originalSummary });
         const action = "prompt2";
         if (currentSummary.trim()) {
             setLoading(prev => ({ ...prev, [action]: true }));
