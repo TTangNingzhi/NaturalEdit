@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import fetch from 'node-fetch';
+import { logInteraction } from '../utils/telemetry';
 
 /**
  * LLM API utility functions for code summarization and editing.
@@ -174,7 +175,7 @@ ${code}
 `;
 
     const parsed = await callLLM(prompt, true);
-    return {
+    const result = {
         title: parsed.title || '',
         low_unstructured: parsed.low_unstructured || '',
         low_structured: parsed.low_structured || '',
@@ -183,6 +184,11 @@ ${code}
         high_unstructured: parsed.high_unstructured || '',
         high_structured: parsed.high_structured || '',
     };
+    logInteraction("summarize_selected_code", {
+        selected_code: code,
+        summary: result
+    });
+    return result;
 }
 
 /**
@@ -248,7 +254,7 @@ ${newCode}
 `;
 
     const parsed = await callLLM(prompt, true);
-    return {
+    const result = {
         title: parsed.title || '',
         low_unstructured: parsed.low_unstructured || '',
         low_structured: parsed.low_structured || '',
@@ -257,6 +263,13 @@ ${newCode}
         high_unstructured: parsed.high_unstructured || '',
         high_structured: parsed.high_structured || '',
     };
+    logInteraction("summarize_modified_code", {
+        new_code: newCode,
+        original_code: originalCode,
+        old_summary: oldSummary,
+        new_summary: result
+    });
+    return result;
 }
 
 /**
@@ -275,6 +288,10 @@ export async function buildSummaryMapping(
         codeSegments: { code: string; line: number }[];
     }[]
 > {
+    const codeWithLineNumbers = code
+        .split('\n')
+        .map((line, idx) => `${idx + realStartLine}: ${line}`)
+        .join('\n');
     const prompt = `
 You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 10 key summary components (phrases or semantic units) from the summary.
 
@@ -303,10 +320,7 @@ Return as a JSON array of objects:
 ]
 
 Code (with line numbers for reference):
-${code
-            .split('\n')
-            .map((line, idx) => `${idx + realStartLine}: ${line}`)
-            .join('\n')}
+${codeWithLineNumbers}
 
 Summary:
 ${summaryText}
@@ -343,6 +357,11 @@ ${summaryText}
                 item.codeSegments = [];
             }
             return item;
+        });
+        logInteraction("map_summary_code", {
+            code: codeWithLineNumbers,
+            summary: summaryText,
+            mapping: filtered
         });
         return filtered;
     }
@@ -390,7 +409,16 @@ Updated code:
 `;
 
     const content = await callLLM(prompt);
-    return cleanLLMCodeBlock(content);
+    const updatedCode = cleanLLMCodeBlock(content);
+    logInteraction("modify_summary_mediation", {
+        original_code: originalCode,
+        original_summary: originalSummary,
+        edited_summary: editedSummary,
+        detail_level: detailLevel,
+        structured_type: structuredType,
+        updated_code: updatedCode
+    });
+    return updatedCode;
 }
 
 /**
@@ -425,7 +453,13 @@ Updated code:
 `;
 
     const content = await callLLM(prompt);
-    return cleanLLMCodeBlock(content);
+    const updatedCode = cleanLLMCodeBlock(content);
+    logInteraction("modify_direct_instruction", {
+        original_code: originalCode,
+        instruction,
+        updated_code: updatedCode
+    });
+    return updatedCode;
 }
 
 /**
@@ -470,5 +504,12 @@ Updated summary:
 `;
 
     const content = await callLLM(prompt);
-    return cleanLLMCodeBlock(content);
+    const updatedSummary = cleanLLMCodeBlock(content);
+    logInteraction("apply_instuction_summary", {
+        original_code: originalCode,
+        original_summary: originalSummary,
+        instruction,
+        updated_summary: updatedSummary
+    });
+    return updatedSummary;
 }

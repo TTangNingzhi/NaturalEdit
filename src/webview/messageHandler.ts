@@ -422,7 +422,14 @@ async function handleGetSummary(
         // Compute real start line (1-based) for mapping anchor
         let realStartLine = 1;
         if (editor) {
-            realStartLine = editor.selection.start.line + 1;
+            const docText = editor.document.getText();
+            const match = findBestMatch(docText, selectedText);
+            if (match.location !== -1) {
+                const startPos = editor.document.positionAt(match.location);
+                realStartLine = startPos.line + 1;
+            } else {
+                realStartLine = editor.selection.start.line + 1;
+            }
         }
 
         // Run all mappings concurrently, pass realStartLine to buildSummaryMapping

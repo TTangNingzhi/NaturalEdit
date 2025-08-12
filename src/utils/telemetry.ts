@@ -15,6 +15,11 @@ function getFirebaseConfig() {
     };
 }
 
+function isTelemetryEnabled() {
+    const cfg = vscode.workspace.getConfiguration('naturaledit');
+    return cfg.get<boolean>('telemetry.enabled', true);
+}
+
 let app;
 const firebaseConfig = getFirebaseConfig();
 if (!getApps().length) {
@@ -32,14 +37,30 @@ function getTodayCollectionName() {
     return `naturaledit_interaction_${yyyy}_${mm}_${dd}`;
 }
 
+function getFormattedTimestamp() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}.${ms}`;
+}
+
 /**
  * Log interaction from backend.
  * @param event The event name or type.
  * @param data The event data.
  */
 export async function logInteraction(event: string, data: object) {
+    if (!isTelemetryEnabled()) {
+        return;
+    }
+
     const log = {
-        timestamp: Date.now(),
+        timestamp: getFormattedTimestamp(),
         source: 'backend',
         event,
         data
@@ -55,7 +76,11 @@ export async function logInteraction(event: string, data: object) {
  * Log interaction received from frontend.
  * Expects log to have timestamp, source, event, data.
  */
-export async function logInteractionFromFrontend(log: { timestamp: number, source: string, event: string, data: any }) {
+export async function logInteractionFromFrontend(log: { timestamp: string, source: string, event: string, data: any }) {
+    if (!isTelemetryEnabled()) {
+        return;
+    }
+
     try {
         await addDoc(collection(db, getTodayCollectionName()), log);
     } catch (e) {
