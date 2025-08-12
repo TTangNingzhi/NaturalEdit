@@ -7,6 +7,7 @@ import { createStatefulMessageHandler, requestSummary } from "../services/Messag
 import SummaryDisplay from "./SummaryDisplay.js";
 import PromptPanel from "./PromptPanel.js";
 import { vscodeApi } from "../utils/vscodeApi";
+import { logInteraction } from "../utils/telemetry";
 
 export function NaturalEditContent() {
     // State for the single section
@@ -46,6 +47,7 @@ export function NaturalEditContent() {
 
     // Handler: Summarize Selected Code
     const handleRequestSummary = () => {
+        logInteraction("click_summarize_code", {});
         // Clear the summary area in PromptPanel before summarizing new code
         setEditSummaryValue("");
         setLoading(true);
