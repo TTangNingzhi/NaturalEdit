@@ -46,6 +46,36 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
     const getSummaryValue = (detail: DetailLevel, structured: StructuredType) =>
         summary[getSummaryKey(detail, structured)] || "";
 
+    // --- Disambiguate repeated summary components ---
+    function disambiguateSummaryAndMappings(
+        summaryText: string,
+        mappings: SummaryCodeMapping[]
+    ): { disambigSummary: string; disambigMappings: (SummaryCodeMapping & { disambigIndex?: number })[] } {
+        // 1. Count occurrences of each summaryComponent
+        const countMap: Record<string, number> = {};
+        mappings.forEach(m => {
+            countMap[m.summaryComponent] = (countMap[m.summaryComponent] || 0) + 1;
+        });
+
+        // 2. For repeated components, assign disambigIndex ONLY in mapping, not in summary text
+        const seenMap: Record<string, number> = {};
+        const disambigMappings = mappings.map(m => {
+            const total = countMap[m.summaryComponent];
+            if (total > 1) {
+                seenMap[m.summaryComponent] = (seenMap[m.summaryComponent] || 0) + 1;
+                return {
+                    ...m,
+                    disambigIndex: seenMap[m.summaryComponent]
+                };
+            } else {
+                return { ...m, disambigIndex: 1 };
+            }
+        });
+
+        // 3. Keep summaryText unchanged, do not perform any replacements
+        return { disambigSummary: summaryText, disambigMappings };
+    }
+
     // Handle "Edit In Prompt" button click
     const handleEdit = () => {
         onEditPrompt(selectedDetailLevel, selectedStructured, getSummaryValue(selectedDetailLevel, selectedStructured));
@@ -56,6 +86,12 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
 
     // Mapping key for summaryMappings
     const mappingKey = getSummaryKey(selectedDetailLevel, selectedStructured);
+
+    // Disambiguate summary and mappings for rendering
+    const { disambigSummary, disambigMappings } = disambiguateSummaryAndMappings(
+        getSummaryValue(selectedDetailLevel, selectedStructured),
+        summaryMappings[mappingKey] || []
+    );
 
     return (
         <div style={COMMON_STYLES.SECTION_COMPACT}>
@@ -128,9 +164,9 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                         {renderDiffedTextWithMapping(
                             oldSummaryData && oldSummaryData[getSummaryKey(selectedDetailLevel, selectedStructured)] !== undefined
                                 ? oldSummaryData[getSummaryKey(selectedDetailLevel, selectedStructured)] as string
-                                : getSummaryValue(selectedDetailLevel, selectedStructured),
-                            getSummaryValue(selectedDetailLevel, selectedStructured),
-                            summaryMappings[mappingKey] || [],
+                                : disambigSummary,
+                            disambigSummary,
+                            disambigMappings,
                             activeMappingIndex,
                             onMappingHover
                         )}

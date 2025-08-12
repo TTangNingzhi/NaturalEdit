@@ -52,7 +52,7 @@ export function renderDiffedText(oldText: string, newText: string): React.ReactN
 export function renderDiffedTextWithMapping(
   oldText: string,
   newText: string,
-  mappings: SummaryCodeMapping[] = [],
+  mappings: (SummaryCodeMapping & { disambigIndex?: number })[] = [],
   activeMappingIndex?: number | null,
   onMappingHover?: (index: number | null) => void
 ): React.ReactNode {
@@ -82,29 +82,36 @@ export function renderDiffedTextWithMapping(
   type MappingRegion = { start: number; end: number; mappingIndex: number };
   const mappingRegions: MappingRegion[] = [];
   if (mappings && mappings.length > 0 && newText) {
-    // For each mapping, find all non-overlapping matches in newText
+    // For each mapping, find the Nth (disambigIndex) occurrence in newText
     const used: Array<[number, number]> = [];
     const isOverlapping = (start: number, end: number) =>
       used.some(([uStart, uEnd]) => !(end <= uStart || start >= uEnd));
+
+    // Helper: find the start index of the nth (1-based) occurrence of subStr in str
+    function findNthOccurrence(str: string, subStr: string, n: number): number {
+      if (!subStr) return -1;
+      let idx = -1;
+      let count = 0;
+      while (count < n) {
+        idx = str.indexOf(subStr, idx + 1);
+        if (idx === -1) return -1;
+        count++;
+      }
+      return idx;
+    }
+
     for (let i = 0; i < mappings.length; ++i) {
-      const comp = mappings[i].summaryComponent;
+      const mapping = mappings[i] as SummaryCodeMapping & { disambigIndex?: number };
+      const comp = mapping.summaryComponent;
+      const disambigIndex = mapping.disambigIndex || 1;
       if (!comp) continue;
-      let searchStart = 0;
-      while (searchStart < newText.length) {
-        // Try exact match (case-sensitive)
-        let matchIdx = newText.indexOf(comp, searchStart);
-        if (matchIdx === -1) {
-          // Try exact match (case-insensitive)
-          matchIdx = newText.toLowerCase().indexOf(comp.toLowerCase(), searchStart);
-        }
-        if (matchIdx === -1) break;
+      // Find the nth occurrence (case-sensitive only, for precision)
+      const matchIdx = findNthOccurrence(newText, comp, disambigIndex);
+      if (matchIdx !== -1) {
         const matchEnd = matchIdx + comp.length;
         if (!isOverlapping(matchIdx, matchEnd)) {
           mappingRegions.push({ start: matchIdx, end: matchEnd, mappingIndex: i });
           used.push([matchIdx, matchEnd]);
-          searchStart = matchEnd;
-        } else {
-          searchStart = matchIdx + 1;
         }
       }
     }
