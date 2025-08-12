@@ -15,6 +15,11 @@ function getFirebaseConfig() {
     };
 }
 
+function isTelemetryEnabled() {
+    const cfg = vscode.workspace.getConfiguration('naturaledit');
+    return cfg.get<boolean>('telemetry.enabled', true);
+}
+
 let app;
 const firebaseConfig = getFirebaseConfig();
 if (!getApps().length) {
@@ -50,6 +55,10 @@ function getFormattedTimestamp() {
  * @param data The event data.
  */
 export async function logInteraction(event: string, data: object) {
+    if (!isTelemetryEnabled()) {
+        return;
+    }
+
     const log = {
         timestamp: getFormattedTimestamp(),
         source: 'backend',
@@ -68,6 +77,10 @@ export async function logInteraction(event: string, data: object) {
  * Expects log to have timestamp, source, event, data.
  */
 export async function logInteractionFromFrontend(log: { timestamp: string, source: string, event: string, data: any }) {
+    if (!isTelemetryEnabled()) {
+        return;
+    }
+
     try {
         await addDoc(collection(db, getTodayCollectionName()), log);
     } catch (e) {

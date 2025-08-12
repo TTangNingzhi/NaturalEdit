@@ -73,6 +73,11 @@
         "naturaledit.firebase.measurementId": {
           "type": "string",
           "default": "G-WBD1ZB51CC"
+        },
+        "naturaledit.telemetry.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable or disable telemetry data collection"
         }
       }
     }
