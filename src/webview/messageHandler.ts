@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import DiffMatchPatch from 'diff-match-patch';
+import { logInteractionFromFrontend } from '../utils/telemetry';
 
 /**
  * Map to track temp file associations for diff/accept/reject workflow.
@@ -185,9 +186,16 @@ export async function handleMessage(
         case 'directPrompt':
             await handleDirectPrompt(message, webviewContainer);
             break;
-            break;
         case 'checkSectionValidity':
             await handleCheckSectionValidity(message, webviewContainer);
+            break;
+        case 'interactionLog':
+            await logInteractionFromFrontend({
+                timestamp: message.timestamp,
+                source: message.source,
+                event: message.event,
+                data: message.data
+            });
             break;
     }
 }
