@@ -56,12 +56,16 @@ const SectionBody: React.FC<SectionBodyProps> = ({
 
         if (index !== null && rawMappings[index]) {
             // On hover: send highlight message with selected code, ALL code snippets, and color index
-            const codeSnippets = rawMappings[index].codeSnippets || [];
+            const codeSegments = Array.isArray(rawMappings[index].codeSegments)
+                ? rawMappings[index].codeSegments.filter(
+                    seg => typeof seg.line === "number" && seg.line > 0
+                )
+                : [];
             const selectedCode = section.metadata.originalCode || "";
             vscodeApi.postMessage({
                 command: "highlightCodeMapping",
-                selectedCode, // send the selected code block
-                codeSnippets, // send as array
+                selectedCode,
+                codeSegments,
                 filename,
                 fullPath,
                 colorIndex: index

@@ -226,7 +226,6 @@ export async function handleMessage(
  * @param message The message containing codeSnippet, filename/fullPath, colorIndex
  */
 async function handleHighlightCodeMapping(message: any) {
-    // Remove any previous highlight
     await handleClearHighlight();
 
     const editor = getLastActiveEditor();
@@ -235,14 +234,13 @@ async function handleHighlightCodeMapping(message: any) {
         return;
     }
 
-    const { selectedCode, codeSnippets, colorIndex, filename, fullPath } = message;
+    const { selectedCode, codeSegments, colorIndex, filename, fullPath } = message;
 
-    if (typeof selectedCode !== "string" || !Array.isArray(codeSnippets) || typeof colorIndex !== "number") {
-        console.warn("[highlightCodeMapping] Invalid selectedCode, codeSnippets, or colorIndex.");
+    if (typeof selectedCode !== "string" || typeof colorIndex !== "number") {
+        console.warn("[highlightCodeMapping] Invalid selectedCode or colorIndex.");
         return;
     }
 
-    // Check file path match
     const editorPath = editor.document.fileName;
     if (fullPath && editorPath !== fullPath) {
         return;
@@ -250,39 +248,38 @@ async function handleHighlightCodeMapping(message: any) {
 
     const docText = editor.document.getText();
 
-    // 1. Find the selectedCode region in the file
     const regionMatch = findBestMatch(docText, selectedCode);
     if (regionMatch.location === -1) {
         console.warn("[highlightCodeMapping] Could not find selectedCode region in file.");
         return;
     }
 
-    const regionStart = regionMatch.location;
-    const regionEnd = regionStart + selectedCode.length;
-    const regionText = docText.slice(regionStart, regionEnd);
-
-    // 2. For each codeSnippet, search within regionText
     const allRanges: vscode.Range[] = [];
-    for (const snippet of codeSnippets) {
-        if (!snippet || !snippet.trim()) { continue; }
-        const pattern = snippet.replace(/\r\n/g, "\n");
 
-        // Find the best match within the region
-        const match = findBestMatch(regionText, pattern);
-        if (match.location !== -1) {
-            // Map regionText offset to docText offset
-            const absStart = regionStart + match.location;
-            const absEnd = absStart + pattern.length;
-            const start = editor.document.positionAt(absStart);
-            const end = editor.document.positionAt(absEnd);
+    if (Array.isArray(codeSegments) && codeSegments.length > 0) {
+        const filteredSegments = codeSegments.filter(
+            seg => seg && typeof seg.line === "number" && seg.line > 0
+        );
+        for (const seg of filteredSegments) {
+            const lineNum = seg.line - 1;
+            if (lineNum < 0 || lineNum >= editor.document.lineCount) { continue; }
+            const lineText = editor.document.lineAt(lineNum).text;
+            let startChar = 0;
+            let endChar = lineText.length;
+            if (typeof seg.code === "string" && seg.code.trim().length > 0) {
+                const idx = lineText.indexOf(seg.code);
+                if (idx !== -1) {
+                    startChar = idx;
+                    endChar = idx + seg.code.length;
+                }
+            }
+            const start = new vscode.Position(lineNum, startChar);
+            const end = new vscode.Position(lineNum, endChar);
             allRanges.push(new vscode.Range(start, end));
-        } else {
-            console.warn("[highlightCodeMapping] Could not match codeSnippet in selectedCode region:", { snippet, selectedCode });
         }
     }
 
     if (allRanges.length > 0) {
-        // Create a decoration type with the correct color and some transparency
         const color = SUMMARY_CODE_MAPPING_COLORS[colorIndex % SUMMARY_CODE_MAPPING_COLORS.length] + "80";
         const decorationType = vscode.window.createTextEditorDecorationType({
             backgroundColor: color,
@@ -290,9 +287,7 @@ async function handleHighlightCodeMapping(message: any) {
             borderRadius: "3px"
         });
 
-        // Apply the decoration to all matched ranges
         editor.setDecorations(decorationType, allRanges);
-        // Store for later removal
         currentHighlightDecoration = decorationType;
         currentHighlightEditor = editor;
     } else {
@@ -421,11 +416,17 @@ async function handleGetSummary(
             stageText: 'Mapping all summaries...'
         });
 
-        // Run all mappings concurrently
+        // Compute real start line (1-based) for mapping anchor
+        let realStartLine = 1;
+        if (editor) {
+            realStartLine = editor.selection.start.line + 1;
+        }
+
+        // Run all mappings concurrently, pass realStartLine to buildSummaryMapping
         const mappingPromises = mappingKeys.map(([detail, structured]) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
             const summaryText = (summary as any)[key] || "";
-            return buildSummaryMapping(selectedText, summaryText);
+            return buildSummaryMapping(selectedText, summaryText, realStartLine);
         });
         const mappingResults = await Promise.all(mappingPromises);
 
@@ -472,12 +473,6 @@ async function handlePromptToSummary(
         message.originalSummary,
         message.promptText
     );
-    console.log('promptToSummary:', {
-        originalCode: message.originalCode,
-        originalSummary: message.originalSummary,
-        promptText: message.promptText,
-        updatedSummary
-    });
 
     // Return the updated summary to the frontend
     webviewContainer.webview.postMessage({

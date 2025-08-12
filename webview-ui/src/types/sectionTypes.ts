@@ -17,11 +17,11 @@ export type SummaryData = {
 /**
  * Represents a mapping between a summary component and one or more code segments.
  * - summaryComponent: The phrase or component from the summary.
- * - codeSnippets: An array of code fragments (to be fuzzy-matched to code ranges in frontend).
+ * - codeSegments: An array of code fragments with their line numbers for precise mapping.
  */
 export interface SummaryCodeMapping {
     summaryComponent: string;
-    codeSnippets: string[]; // Array of code fragments (to be fuzzy-matched to code ranges in frontend)
+    codeSegments: { code: string; line: number }[]; // Each code fragment with its line number
 }
 
 export type DetailLevel = "low" | "medium" | "high";

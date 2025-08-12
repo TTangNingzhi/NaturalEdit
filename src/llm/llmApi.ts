@@ -267,36 +267,46 @@ ${newCode}
  */
 export async function buildSummaryMapping(
     code: string,
-    summaryText: string
+    summaryText: string,
+    realStartLine: number = 1
 ): Promise<
     {
         summaryComponent: string;
-        codeRanges: [number, number][];
+        codeSegments: { code: string; line: number }[];
     }[]
 > {
-    // The prompt now explicitly requires that each summaryComponent must be a substring of the summary.
     const prompt = `
 You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 10 key summary components (phrases or semantic units) from the summary.
+
 IMPORTANT:
 1. Each summaryComponent you extract MUST be a substring (exact part) of the summary text below.
 2. Extract summaryComponents in the exact order they appear in the summary text.
 3. Do NOT hallucinate or invent summary components that do not appear in the summary.
-4. If a code snippet contains multiple lines, split them into separate strings in the codeSnippets array.
 
-For each summaryComponent, extract one or more relevant code snippets (as string, not line numbers) from the code that best match the meaning of the summary component.
-- Prefer to use a complete code statement (such as a full line, assignment, function definition, or block) as the code snippet if it clearly represents the summary component's meaning.
+For each summaryComponent, extract one or more relevant code segments from the code that best match the meaning of the summary component.
+- For each code segment, return both the code fragment (as a string) and its line number in the original code (1-based).
+- Prefer to use a complete code statement (such as a full line, assignment, function definition, or block) as the code segment if it clearly represents the summary component's meaning.
 - If a full statement is not appropriate or would be ambiguous, you should use a smaller, relevant fragment (such as a variable, function name, operator, or part of an expression).
 - Only include enough code to make the mapping meaningful and unambiguous.
-- If a code snippet contains multiple lines, split them into separate strings in the codeSnippets array.
+- If a code segment contains multiple lines, split them into separate objects in the codeSegments array.
 
 Return as a JSON array of objects:
 [
-  { "summaryComponent": "...", "codeSnippets": ["code fragment 1", "code fragment 2"] },
+  { 
+    "summaryComponent": "...", 
+    "codeSegments": [
+      { "code": "code fragment 1", "line": 12 },
+      { "code": "code fragment 2", "line": 15 }
+    ]
+  },
   ...
 ]
 
-Code:
-${code}
+Code (with line numbers for reference):
+${code
+            .split('\n')
+            .map((line, idx) => `${idx + realStartLine}: ${line}`)
+            .join('\n')}
 
 Summary:
 ${summaryText}
@@ -307,7 +317,6 @@ ${summaryText}
     try {
         parsed = JSON.parse(raw);
     } catch (e1) {
-        // Try cleaning code block markers and parse again
         const cleaned = cleanLLMCodeBlock(raw);
         try {
             parsed = JSON.parse(cleaned);
@@ -316,14 +325,12 @@ ${summaryText}
         }
     }
 
-    // Post-processing: filter and log any summaryComponent that is not a substring of the summaryText
     if (Array.isArray(parsed)) {
         const filtered = parsed.filter((item) => {
             if (
                 typeof item.summaryComponent === "string" &&
                 !summaryText.includes(item.summaryComponent)
             ) {
-                // Log a warning if hallucinated summaryComponent is found
                 console.warn(
                     `[buildSummaryMapping] summaryComponent not found in summary:`,
                     item.summaryComponent
@@ -331,6 +338,11 @@ ${summaryText}
                 return false;
             }
             return true;
+        }).map((item) => {
+            if (!Array.isArray(item.codeSegments)) {
+                item.codeSegments = [];
+            }
+            return item;
         });
         return filtered;
     }
