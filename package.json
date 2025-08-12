@@ -42,7 +42,40 @@
         "title": "Update OpenAI API Key",
         "category": "NaturalEdit"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "NaturalEdit",
+      "properties": {
+        "naturaledit.firebase.apiKey": {
+          "type": "string",
+          "default": "AIzaSyDMfIlacHAOlhGMT9ArGnh2B8GovBy0FgU"
+        },
+        "naturaledit.firebase.authDomain": {
+          "type": "string",
+          "default": "naturaledit-study.firebaseapp.com"
+        },
+        "naturaledit.firebase.projectId": {
+          "type": "string",
+          "default": "naturaledit-study"
+        },
+        "naturaledit.firebase.storageBucket": {
+          "type": "string",
+          "default": "naturaledit-study.firebasestorage.app"
+        },
+        "naturaledit.firebase.messagingSenderId": {
+          "type": "string",
+          "default": "544885114600"
+        },
+        "naturaledit.firebase.appId": {
+          "type": "string",
+          "default": "1:544885114600:web:334f00c5c4c26be47a6b5d"
+        },
+        "naturaledit.firebase.measurementId": {
+          "type": "string",
+          "default": "G-WBD1ZB51CC"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -76,6 +109,7 @@
   },
   "dependencies": {
     "diff-match-patch": "^1.0.5",
+    "firebase": "^12.1.0",
     "node-fetch": "^2.7.0",
     "uuid": "^11.1.0"
   }

@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import DiffMatchPatch from 'diff-match-patch';
+import { logInteractionFromFrontend } from '../utils/telemetry';
 
 // Color palette for summary-code mapping highlights (must match frontend)
 const SUMMARY_CODE_MAPPING_COLORS = [
@@ -185,12 +186,6 @@ function applyPatch(
     }
 }
 
-/**
- * Handles incoming messages from the webview.
- * Accepts either a WebviewPanel (tab) or WebviewView (sidebar).
- * @param message The message received from the webview
- * @param webviewContainer The webview panel or view instance
- */
 export async function handleMessage(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
@@ -216,6 +211,14 @@ export async function handleMessage(
             break;
         case 'checkSectionValidity':
             await handleCheckSectionValidity(message, webviewContainer);
+            break;
+        case 'interactionLog':
+            await logInteractionFromFrontend({
+                timestamp: message.timestamp,
+                source: message.source,
+                event: message.event,
+                data: message.data
+            });
             break;
     }
 }
