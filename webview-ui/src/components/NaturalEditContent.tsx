@@ -5,6 +5,7 @@ import { ClipLoader } from "react-spinners";
 import SectionList from "./SectionList.js";
 import { SectionData } from "../types/sectionTypes.js";
 import { createStatefulMessageHandler, requestSummary } from "../services/MessageHandler.js";
+import { logInteraction } from "../utils/telemetry";
 
 interface NaturalEditContentProps {
     onSectionsChange: (sections: SectionData[]) => void;
@@ -25,6 +26,7 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
 
     // Handler: Summarize Selected Code
     const handleRequestSummary = () => {
+        logInteraction("click_summarize_code", {});
         setLoading(true);
         setError(null);
         setLoadingText("Summarizing..."); // Reset to default at start

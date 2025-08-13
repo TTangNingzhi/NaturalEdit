@@ -76,7 +76,7 @@
         },
         "naturaledit.telemetry.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable or disable telemetry data collection"
         }
       }
