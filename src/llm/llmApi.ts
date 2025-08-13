@@ -227,7 +227,7 @@ You are an expert code summarizer. Your task is to generate a new summary for th
 
 Instructions:
 - Your new summary MUST focus on the code differences (addition, deletion) between the original and modified code and clearly reflect those changes, even if they are small, such as inline comments.
-- Make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update). I mean, do not describe the change itself, but instead, seamlessly integrate the changes into the new summary.
+- Make the changed parts of the summary easy to identify (e.g., by being explicit about what changed, or by using wording that highlights the update). I mean, rather than describing the change itself (e.g., updated the function to ...), seamlessly integrate the changes into the new summary in one coherent, descriptive sentence.
 - The new summary should be close to the old summary, only updating the parts that are affected by the code change:  If a part of the summary is still accurate for the new code, keep it unchanged; If a part of the summary is no longer accurate, change only that part to reflect the new code. Do not add unnecessary changes or rephrase unchanged parts.
 - For all structured (bulleted) summaries, return as a single string. Each bullet must start with "•" and be separated by \\n. For medium_structured and high_structured, if there are logical groupings, you should use two-level bullets ("•" and "◦"). For the second-level bullet ("◦"), always indent with 2 spaces before the "◦". Never return an array.
 - Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
