@@ -8,6 +8,7 @@ import { logInteraction } from "../utils/telemetry";
 interface SummaryDisplayProps {
     summary: string;
     onEditSummary?: (summary: string) => void;
+    sectionId: string;
 }
 
 /**
@@ -15,7 +16,7 @@ interface SummaryDisplayProps {
  * - Shows only the detailed summary as plain text
  * - Includes an edit button to load summary into the Summary-Mediated Prompt editor
  */
-const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, onEditSummary }) => {
+const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, onEditSummary, sectionId }) => {
     return (
         <div style={COMMON_STYLES.SECTION_COMPACT}>
             {/* Top row: label left, edit button right */}
@@ -26,7 +27,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, onEditSummary 
                     aria-label="Edit In Prompt"
                     title="Edit In Prompt"
                     onClick={() => {
-                        logInteraction("click_edit_in_prompt", { summary });
+                        logInteraction("click_edit_in_prompt", { summary, section_id: sectionId });
                         if (onEditSummary) {
                             onEditSummary(summary);
                         }

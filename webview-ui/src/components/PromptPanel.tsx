@@ -64,7 +64,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
 
     // Direct prompt send
     const handleDirectPromptSend = async () => {
-        logInteraction("commit_direct_instruction", { instruction: directPrompt });
+        logInteraction("commit_direct_instruction", { section_id: metadata.id, instruction: directPrompt });
         const action = "prompt1";
         if (directPrompt.trim()) {
             setLoading(prev => ({ ...prev, [action]: true }));
@@ -86,7 +86,7 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
 
     // Commit summary to backend (only detailed)
     const handleSummaryCommit = async () => {
-        logInteraction("commit_modified_summary", { edited_summary: currentSummary, original_summary: originalSummary });
+        logInteraction("commit_modified_summary", { section_id: metadata.id, edited_summary: currentSummary, original_summary: originalSummary });
         const action = "prompt2";
         if (currentSummary.trim()) {
             setLoading(prev => ({ ...prev, [action]: true }));

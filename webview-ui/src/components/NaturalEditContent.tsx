@@ -161,6 +161,7 @@ export function NaturalEditContent() {
                     <SummaryDisplay
                         summary={section.summaryData}
                         onEditSummary={handleEditSummary}
+                        sectionId={section.metadata.id}
                     />
                     <PromptPanel section={section} editSummaryValue={editSummaryValue} />
                     {validityStatus !== "success" && validityStatus !== "pending" && (

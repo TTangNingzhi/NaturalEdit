@@ -1,6 +1,7 @@
 import { vscodeApi } from "../utils/vscodeApi";
 import { SectionData, SummaryResultMessage } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
+import { logInteraction } from "../utils/telemetry.js";
 
 /**
  * Handle messages from VSCode, including progress updates.
@@ -160,6 +161,7 @@ export const createStatefulMessageHandler = (
         (section) => {
             setLoading(false);
             setSectionList(prev => [...prev, section]);
+            logInteraction("create_new_section", { section_id: section.metadata.id, section_data: section });
         },
         (sectionId, action, newCode) => {
             if (action === "promptToSummary") {
