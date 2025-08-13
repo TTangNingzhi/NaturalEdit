@@ -8,6 +8,7 @@ import { SectionData, DetailLevel, StructuredType } from "../types/sectionTypes.
 import { FONT_SIZE, SPACING, COMMON_STYLES, COLORS } from "../styles/constants.js";
 import { usePrompt } from "../hooks/usePrompt.js";
 import { ClipLoader } from "react-spinners";
+import { logInteraction } from "../utils/telemetry";
 
 interface PromptPanelProps {
     section: SectionData;
@@ -72,6 +73,10 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     const handleDirectPromptSend = async () => {
         const action = "prompt1";
         if (directPrompt.trim()) {
+            logInteraction("commit_direct_instruction", {
+                section_id: metadata.id,
+                instruction: directPrompt.trim()
+            });
             setLoading(prev => ({ ...prev, [action]: true }));
             setError(prev => ({ ...prev, [action]: null }));
             try {
@@ -93,6 +98,13 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     const handleApplyToSummary = async () => {
         const action = "applyToSummary";
         if (editPromptDetailLevel && editPromptStructured && directPrompt.trim()) {
+            logInteraction("apply_instruction_summary", {
+                section_id: metadata.id,
+                instruction: directPrompt.trim(),
+                detail_level: editPromptDetailLevel,
+                structured: editPromptStructured,
+                original_summary: originalSummary
+            });
             setLoading(prev => ({ ...prev, [action]: true }));
             setError(prev => ({ ...prev, [action]: null }));
             try {
@@ -114,6 +126,13 @@ const PromptPanel: React.FC<PromptPanelProps> = ({
     const handleSummaryCommit = async () => {
         const action = "prompt2";
         if (localEditPromptDetailLevel && localEditPromptStructured && currentSummary.trim()) {
+            logInteraction("commit_modified_summary", {
+                section_id: metadata.id,
+                edited_summary: currentSummary.trim(),
+                detail_level: localEditPromptDetailLevel,
+                structured: localEditPromptStructured,
+                original_summary: originalSummary
+            });
             setLoading(prev => ({ ...prev, [action]: true }));
             setError(prev => ({ ...prev, [action]: null }));
             try {

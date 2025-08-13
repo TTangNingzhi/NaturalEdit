@@ -7,6 +7,7 @@ import {
     EditResultMessage
 } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
+import { logInteraction } from "../utils/telemetry.js";
 
 /**
  * Handle messages from VSCode, including progress updates.
@@ -132,10 +133,6 @@ export const setupMessageHandler = (
     vscodeApi.onMessage(handleMessage);
 };
 
-/**
- * Request summary from VSCode, optionally with oldSummaryData for diffed rendering.
- * @param oldSummaryData Optional previous summary data to pass for diff rendering
- */
 /**
  * Request summary from VSCode, optionally with newCode and oldSummaryData for diffed rendering.
  * @param newCode The new code to summarize (optional)
@@ -291,6 +288,8 @@ export const createStatefulMessageHandler = (
         (section) => {
             setLoading(false);
             setSectionList(prev => [...prev, section]);
+            // Log the complete section data for telemetry/analysis
+            logInteraction("create_new_section", { section_id: section.metadata.id, section_data: section });
         },
         (sectionId, action, newCode) => {
             // Only update editPromptValue for promptToSummary action

@@ -4,6 +4,7 @@ import PromptPanel from "./PromptPanel.js";
 import { SectionData, DetailLevel, StructuredType } from "../types/sectionTypes.js";
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZE } from "../styles/constants.js";
 import { vscodeApi } from "../utils/vscodeApi"; // Import VSCode API for backend communication
+import { logInteraction } from "../utils/telemetry";
 
 interface SectionBodyProps {
     section: SectionData;
@@ -12,10 +13,6 @@ interface SectionBodyProps {
     onDeleteSection: () => void; // Handler for deleting the section
 }
 
-/**
- * SectionBody component
- * Contains the summary display and prompt panel
- */
 /**
  * SectionBody component
  * Contains the summary display and prompt panel, and checks section validity on expand.
@@ -50,6 +47,22 @@ const SectionBody: React.FC<SectionBodyProps> = ({
      */
     const handleMappingHover = (index: number | null) => {
         setActiveMappingIndex(index);
+
+        // Log mapping hover/unhover interaction for telemetry analysis
+        if (index !== null && rawMappings[index]) {
+            logInteraction("mapping_hover", {
+                section_id: section.metadata.id,
+                mapping_index: index,
+                detail_level: selectedDetailLevel,
+                structured_type: selectedStructured
+            });
+        } else {
+            logInteraction("mapping_unhover", {
+                section_id: section.metadata.id,
+                detail_level: selectedDetailLevel,
+                structured_type: selectedStructured
+            });
+        }
 
         // Get file info from section metadata
         const { filename, fullPath } = section.metadata;
@@ -165,7 +178,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                         {overlayMessage}
                     </div>
                     <button
-                        onClick={onDeleteSection}
+                        onClick={() => { onDeleteSection(); }}
                         style={{
                             padding: "0.3em 1.2em",
                             background: COLORS.ERROR,
