@@ -289,7 +289,7 @@ export const createStatefulMessageHandler = (
             setLoading(false);
             setSectionList(prev => [...prev, section]);
             // Log the complete section data for telemetry/analysis
-            logInteraction("create_new_section", { sectionData: section });
+            logInteraction("create_new_section", { section_id: section.metadata.id, section_data: section });
         },
         (sectionId, action, newCode) => {
             // Only update editPromptValue for promptToSummary action

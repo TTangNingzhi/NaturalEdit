@@ -30,7 +30,7 @@ if (!getApps().length) {
 const db = getFirestore(app);
 
 function getTodayCollectionName() {
-    const now = new Date();
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })); // Force Eastern Time directly
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
@@ -38,7 +38,7 @@ function getTodayCollectionName() {
 }
 
 function getFormattedTimestamp() {
-    const now = new Date();
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })); // Force Eastern Time directly
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
