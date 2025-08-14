@@ -111,7 +111,7 @@ async function callLLM(prompt: string, parseJson: boolean = false): Promise<any>
             'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-            model: 'gpt-4o',
+            model: 'gpt-4.1',
             messages: [
                 { role: 'system', content: 'You are a helpful assistant.' },
                 { role: 'user', content: prompt }
