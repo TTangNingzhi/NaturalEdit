@@ -27,6 +27,9 @@ export class NaturalEditViewProvider implements vscode.WebviewViewProvider {
         // Always enable scripts in the webview
         webviewView.webview.options = {
             enableScripts: true,
+            localResourceRoots: [
+                vscode.Uri.joinPath(this._context.extensionUri, 'webview-ui', 'dist')
+            ],
         };
 
         // Detect development mode using extensionMode

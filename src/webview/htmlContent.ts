@@ -48,11 +48,11 @@ export function generateProdHtml(context: vscode.ExtensionContext, webview: vsco
     throw new Error('Frontend build files are missing. Please make sure you have built the frontend.');
   }
 
-  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(assetsDir, jsFile));
   const codiconTtfUri = webview.asWebviewUri(vscode.Uri.joinPath(assetsDir, codiconTtfFile));
 
   const svgIconMap = buildSvgIconMap(context, webview, assetsDir, assetFiles);
   const cssContent = processCssContent(assetsDir, cssFile, codiconTtfUri);
+  const jsContent = fs.readFileSync(path.join(assetsDir.fsPath, jsFile), 'utf-8');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -68,7 +68,7 @@ export function generateProdHtml(context: vscode.ExtensionContext, webview: vsco
       window.vscode = acquireVsCodeApi();
       window.__SVG_ICON_MAP__ = ${JSON.stringify(svgIconMap)};
     </script>
-    <script type="module" src="${scriptUri}"></script>
+    <script>${jsContent}</script>
   </body>
 </html>`;
 }
