@@ -27,9 +27,13 @@ const SUMMARY_CODE_MAPPING_COLORS = [
 const BITAP_LIMIT = 32;
 const MIN_MATCH_SCORE = 0.9;
 
-// Persistent variables to track current highlight decoration
-let currentHighlightDecoration: vscode.TextEditorDecorationType | null = null;
-let currentHighlightEditor: vscode.TextEditor | null = null;
+// Structured state for the current highlight to avoid races and attach lifecycle disposables
+let currentHighlight: {
+    id: string;
+    decoration: vscode.TextEditorDecorationType;
+    editor: vscode.TextEditor;
+    disposables: vscode.Disposable[];
+} | null = null;
 
 /**
  * Map to track temp file associations for diff/accept/reject workflow.
@@ -291,8 +295,25 @@ async function handleHighlightCodeMapping(message: any) {
         });
 
         editor.setDecorations(decorationType, allRanges);
-        currentHighlightDecoration = decorationType;
-        currentHighlightEditor = editor;
+        // create a new highlight record with lifecycle disposables
+        const highlightId = uuidv4();
+        const disposables: vscode.Disposable[] = [];
+        disposables.push(vscode.workspace.onDidChangeTextDocument((e) => {
+            if (e.document.fileName === editor.document.fileName) {
+                void handleClearHighlight(highlightId);
+            }
+        }));
+        disposables.push(vscode.workspace.onDidCloseTextDocument((doc) => {
+            if (doc.fileName === editor.document.fileName) {
+                void handleClearHighlight(highlightId);
+            }
+        }));
+        disposables.push(vscode.window.onDidChangeActiveTextEditor((active) => {
+            if (!active || active.document.fileName !== editor.document.fileName) {
+                void handleClearHighlight(highlightId);
+            }
+        }));
+        currentHighlight = { id: highlightId, decoration: decorationType, editor, disposables };
     } else {
         console.warn("[highlightCodeMapping] No code regions found to highlight.");
     }
@@ -302,13 +323,27 @@ async function handleHighlightCodeMapping(message: any) {
  * Handles the clearHighlight command from the webview.
  * Removes any existing highlight decoration from the editor.
  */
-async function handleClearHighlight() {
-    if (currentHighlightDecoration && currentHighlightEditor) {
-        currentHighlightEditor.setDecorations(currentHighlightDecoration, []);
-        currentHighlightDecoration.dispose();
+async function handleClearHighlight(id?: string) {
+    if (!currentHighlight) { return; }
+    if (id && currentHighlight.id !== id) { return; }
+
+    try {
+        try {
+            currentHighlight.editor.setDecorations(currentHighlight.decoration, []);
+        } catch (e) {
+            // ignore setDecorations errors
+        }
+        try {
+            currentHighlight.decoration.dispose();
+        } catch (e) {
+            // ignore dispose errors
+        }
+        for (const d of currentHighlight.disposables) {
+            try { d.dispose(); } catch { }
+        }
+    } finally {
+        currentHighlight = null;
     }
-    currentHighlightDecoration = null;
-    currentHighlightEditor = null;
 }
 
 /**
