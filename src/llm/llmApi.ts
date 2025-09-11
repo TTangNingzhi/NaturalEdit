@@ -505,7 +505,7 @@ Updated summary:
 
     const content = await callLLM(prompt);
     const updatedSummary = cleanLLMCodeBlock(content);
-    logInteraction("apply_instuction_summary", {
+    logInteraction("apply_instruction_summary", {
         original_code: originalCode,
         original_summary: originalSummary,
         instruction,
