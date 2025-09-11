@@ -1,13 +1,13 @@
 {
   "name": "naturaledit",
   "displayName": "NaturalEdit",
-  "publisher": "sandwich-lab",
+  "publisher": "anonartifactbase",
   "icon": "media/icon.png",
   "description": "Transform your code by editing natural language summaries",
   "version": "0.0.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TTangNingzhi/NaturalEdit"
+    "url": "https://github.com/anonartifactbase/NaturalEdit"
   },
   "engines": {
     "vscode": "^1.89.0"
