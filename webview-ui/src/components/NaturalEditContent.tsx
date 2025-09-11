@@ -113,7 +113,7 @@ export function NaturalEditContent() {
                 color: COLORS.FOREGROUND,
                 fontSize: FONT_SIZE.TITLE
             }}>
-                PASTA
+                EditHelper
             </h2>
             <div style={{
                 color: COLORS.DESCRIPTION,

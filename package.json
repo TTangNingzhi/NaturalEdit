@@ -1,13 +1,13 @@
 {
-  "name": "pasta",
-  "displayName": "PASTA",
-  "publisher": "sandwich-lab",
+  "name": "edithelper",
+  "displayName": "EditHelper",
+  "publisher": "anonartifactbase",
   "icon": "media/icon.png",
   "description": "Transform your code by editing natural language summaries",
   "version": "0.0.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TTangNingzhi/NaturalEdit"
+    "url": "https://github.com/anonartifactbase/NaturalEdit"
   },
   "engines": {
     "vscode": "^1.89.0"
@@ -22,7 +22,7 @@
       "activitybar": [
         {
           "id": "pasta-sidebar",
-          "title": "PASTA",
+          "title": "EditHelper",
           "icon": "media/icon.svg"
         }
       ]
@@ -31,7 +31,7 @@
       "pasta-sidebar": [
         {
           "id": "pasta.sidebarView",
-          "name": "PASTA",
+          "name": "EditHelper",
           "type": "webview"
         }
       ]
