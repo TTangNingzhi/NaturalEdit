@@ -1,18 +1,16 @@
 # NaturalEdit
 
-NaturalEdit is a Visual Studio Code extension that provides intelligent code summarization and interactive prompt-based features directly within the editor. It leverages a modern React-based webview UI for a seamless and visually consistent experience with the VS Code theme.
+NaturalEdit is a VS Code extension that transforms static code summaries into interactive, adaptive representations directly linked to source code. It introduces a new paradigm for code modification through natural language representations, giving developers stronger comprehension, control, and validation capabilities.
 
 ## Features
 
-- Summarize selected code with concise, detailed, or bullet-pointed explanations.
-- Interactive prompt panel for custom code analysis and editing.
-- Fully theme-aware UI, matching your current VS Code color scheme.
-- Fast, modern frontend built with React and Vite.
+- **Adaptive Summaries:** Toggle between paragraph or bulleted views, and adjust detail from high-level overviews to line-by-line explanations.
+- **Interactive Mapping:** Hover over natural language segments to highlight corresponding code blocks for tight NL–code alignment.
+- **Intent-Driven Editing:** Edit by high-level intent; NaturalEdit synchronizes summaries and code with clear, incremental diffs.
 
 ## Getting Started
 
-1. Install the extension from the VSIX package or the VS Code Marketplace.
-2. Select code in the editor and use the NaturalEdit commands from the command palette or UI panel.
+Install the extension from the VSIX package or the VS Code Marketplace (not published yet).
 
 ## Requirements
 
@@ -27,7 +25,3 @@ NaturalEdit is a Visual Studio Code extension that provides intelligent code sum
 ### 1.0.0
 
 - Initial release with code summarization and prompt features.
-
----
-
-**Enjoy using NaturalEdit to supercharge your code understanding and productivity!**
