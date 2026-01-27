@@ -213,6 +213,9 @@ export async function handleMessage(
         case 'clearHighlight':
             await handleClearHighlight();
             break;
+        case 'selectCodeMapping':
+            await handleSelectCodeMapping(message);
+            break;
         case 'checkSectionValidity':
             await handleCheckSectionValidity(message, webviewContainer);
             break;
@@ -344,6 +347,76 @@ async function handleClearHighlight(id?: string) {
     } finally {
         currentHighlight = null;
     }
+}
+
+/**
+ * Handles the selectCodeMapping command from the webview.
+ * Applies a selection to the editor spanning from the first code segment to the last.
+ * @param message The message containing codeSegments, filename, fullPath
+ */
+async function handleSelectCodeMapping(message: any) {
+    const editor = getLastActiveEditor();
+    if (!editor) {
+        console.warn("[selectCodeMapping] No active editor found.");
+        return;
+    }
+
+    const { codeSegments, filename, fullPath } = message;
+
+    if (!Array.isArray(codeSegments) || codeSegments.length === 0) {
+        console.warn("[selectCodeMapping] No code segments provided.");
+        return;
+    }
+
+    const editorPath = editor.document.fileName;
+    if (fullPath && editorPath !== fullPath) {
+        return;
+    }
+
+    const filteredSegments = codeSegments.filter(
+        seg => seg && typeof seg.line === "number" && seg.line > 0
+    );
+
+    if (filteredSegments.length === 0) {
+        console.warn("[selectCodeMapping] No valid code segments after filtering.");
+        return;
+    }
+
+    const firstSegment = filteredSegments[0];
+    const lastSegment = filteredSegments[filteredSegments.length - 1];
+
+    const firstLineNum = firstSegment.line - 1;
+    const lastLineNum = lastSegment.line - 1;
+
+    if (firstLineNum < 0 || lastLineNum >= editor.document.lineCount) {
+        console.warn("[selectCodeMapping] Code segments out of document bounds.");
+        return;
+    }
+
+    const firstLineText = editor.document.lineAt(firstLineNum).text;
+    const lastLineText = editor.document.lineAt(lastLineNum).text;
+
+    let startChar = 0;
+    if (typeof firstSegment.code === "string" && firstSegment.code.trim().length > 0) {
+        const idx = firstLineText.indexOf(firstSegment.code);
+        if (idx !== -1) {
+            startChar = idx;
+        }
+    }
+
+    let endChar = lastLineText.length;
+    if (typeof lastSegment.code === "string" && lastSegment.code.trim().length > 0) {
+        const idx = lastLineText.indexOf(lastSegment.code);
+        if (idx !== -1) {
+            endChar = idx + lastSegment.code.length;
+        }
+    }
+
+    const selectionStart = new vscode.Position(firstLineNum, startChar);
+    const selectionEnd = new vscode.Position(lastLineNum, endChar);
+
+    editor.selection = new vscode.Selection(selectionStart, selectionEnd);
+    editor.revealRange(new vscode.Range(selectionStart, selectionEnd), vscode.TextEditorRevealType.InCenter);
 }
 
 /**

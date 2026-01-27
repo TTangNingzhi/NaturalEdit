@@ -93,6 +93,42 @@ const SectionBody: React.FC<SectionBodyProps> = ({
         }
     };
 
+    /**
+     * Handles click events on summary mapping components.
+     * Sends selection message to the backend to select the corresponding code range.
+     * @param index The mapping index being clicked
+     */
+    const handleMappingClick = (index: number) => {
+        if (!rawMappings[index]) {
+            return;
+        }
+
+        // Log mapping click interaction for telemetry analysis
+        logInteraction("mapping_click", {
+            section_id: section.metadata.id,
+            mapping_index: index,
+            detail_level: selectedDetailLevel,
+            structured_type: selectedStructured
+        });
+
+        // Get file info from section metadata
+        const { filename, fullPath } = section.metadata;
+
+        // Send selection message with code segments for this mapping
+        const codeSegments = Array.isArray(rawMappings[index].codeSegments)
+            ? rawMappings[index].codeSegments.filter(
+                seg => typeof seg.line === "number" && seg.line > 0
+            )
+            : [];
+
+        vscodeApi.postMessage({
+            command: "selectCodeMapping",
+            codeSegments,
+            filename,
+            fullPath
+        });
+    };
+
     // Effect: On mount, check section validity with backend
     useEffect(() => {
         // Send message to backend to check file and code validity
@@ -146,6 +182,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
                 summaryMappings={summaryMappings}
                 activeMappingIndex={activeMappingIndex}
                 onMappingHover={handleMappingHover}
+                onMappingClick={handleMappingClick}
                 oldSummaryData={section.oldSummaryData}
             />
             <PromptPanel section={section} />
