@@ -18,6 +18,7 @@ interface SummaryDisplayProps {
     };
     activeMappingIndex?: number | null;
     onMappingHover?: (index: number | null) => void;
+    onMappingClick?: (index: number) => void;
     oldSummaryData?: SummaryData; // Optional: previous summary for diff rendering
 }
 
@@ -37,6 +38,7 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
     summaryMappings = {},
     activeMappingIndex,
     onMappingHover,
+    onMappingClick,
     oldSummaryData
 }) => {
     // Get the value for the selected summary type
@@ -168,7 +170,8 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({
                             disambigSummary,
                             disambigMappings,
                             activeMappingIndex,
-                            onMappingHover
+                            onMappingHover,
+                            onMappingClick
                         )}
                     </pre>
                 </div>
