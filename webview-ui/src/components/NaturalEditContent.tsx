@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { VSCodeButton, VSCodeTextArea } from "@vscode/webview-ui-toolkit/react/index.js";
+import { VSCodeButton, VSCodeTextField } from "@vscode/webview-ui-toolkit/react/index.js";
 import { FONT_SIZE, COLORS, SPACING } from "../styles/constants.js";
 import { ClipLoader } from "react-spinners";
 import SectionList from "./SectionList.js";
@@ -115,7 +115,7 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: isWandActive ? "color-mix(in srgb, var(--vscode-focusBorder) 50%, transparent)" : "transparent",
+                        backgroundColor: isWandActive ? "color-mix(in srgb, var(--vscode-focusBorder) 40%, transparent)" : "transparent",
                         padding: SPACING.TINY,
                     }}
                 >
@@ -124,11 +124,10 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
             </div>
             {isWandActive && (
                 <div style={{ marginTop: SPACING.SMALL, marginBottom: SPACING.SMALL }}>
-                    <VSCodeTextArea
+                    <VSCodeTextField
                         value={customInstruction}
                         placeholder="Enter your custom instructions, e.g., focus on security risks"
-                        onInput={(e) => setCustomInstruction((e.target as HTMLTextAreaElement).value)}
-                        rows={1}
+                        onInput={(e) => setCustomInstruction((e.target as HTMLInputElement).value)}
                         style={{
                             width: "100%",
                             fontSize: FONT_SIZE.SMALL,
