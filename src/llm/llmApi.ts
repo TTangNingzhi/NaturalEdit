@@ -141,9 +141,10 @@ async function callLLM(prompt: string, parseJson: boolean = false): Promise<any>
  * Get a multi-level summary of the given code using LLM
  * @param code The code to summarize
  * @param fileContext The file context where the code is located
+ * @param customInstruction Optional custom instruction to apply to the summary
  * @returns Object containing title, concise, detailed, and bulleted summaries
  */
-export async function getCodeSummary(code: string, fileContext: string): Promise<{
+export async function getCodeSummary(code: string, fileContext: string, customInstruction?: string): Promise<{
     title: string;
     low_unstructured: string;
     low_structured: string;
@@ -152,6 +153,10 @@ export async function getCodeSummary(code: string, fileContext: string): Promise
     high_unstructured: string;
     high_structured: string;
 }> {
+    const customInstructionText = customInstruction && customInstruction.trim()
+        ? `\nAdditional custom instruction from the user (apply this to all summaries):\n${customInstruction.trim()}\n`
+        : '';
+
     const prompt = `
 You are an expert code summarizer. For the following code, generate 6 summaries, one for each combination of detail level (low, medium, high) and structure (unstructured, i.e., paragraph, structured, i.e., bulleted):
 - low_unstructured: One-sentence, low-detail, paragraph style.
@@ -166,6 +171,7 @@ IMPORTANT:
 - The file context below is provided ONLY for reference to help understand the code's environment.
 - Your summary MUST focus ONLY on the specific code snippet provided.
 - Return your response as a JSON object with keys: title, low_unstructured, low_structured, medium_unstructured, medium_structured, high_unstructured, high_structured.
+${customInstructionText}
 
 File Context (for reference only):
 ${fileContext}

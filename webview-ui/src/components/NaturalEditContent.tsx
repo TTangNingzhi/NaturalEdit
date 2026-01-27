@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { VSCodeButton } from "@vscode/webview-ui-toolkit/react/index.js";
+import { VSCodeButton, VSCodeTextArea } from "@vscode/webview-ui-toolkit/react/index.js";
 import { FONT_SIZE, COLORS, SPACING } from "../styles/constants.js";
 import { ClipLoader } from "react-spinners";
 import SectionList from "./SectionList.js";
@@ -18,6 +18,9 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
     const [error, setError] = useState<string | null>(null);
     // State for loading text (progress message)
     const [loadingText, setLoadingText] = useState("Summarizing...");
+    // State for custom instruction wand button
+    const [isWandActive, setIsWandActive] = useState(false);
+    const [customInstruction, setCustomInstruction] = useState("");
 
     // Setup message handler with progress callback
     useEffect(() => {
@@ -30,7 +33,15 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
         setLoading(true);
         setError(null);
         setLoadingText("Summarizing..."); // Reset to default at start
-        requestSummary();
+        const instruction = isWandActive && customInstruction.trim() ? customInstruction.trim() : undefined;
+        requestSummary(undefined, undefined, instruction);
+    };
+
+    // Handler: Toggle wand active state
+    const handleWandToggle = () => {
+        const newActiveState = !isWandActive;
+        setIsWandActive(newActiveState);
+        logInteraction("toggle_custom_instruction", { active: newActiveState });
     };
 
     // Reset loading text on error or when not loading
@@ -66,28 +77,62 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
             }}>
                 Transform your code seamlessly by modifying its natural language representation.
             </div>
-            <VSCodeButton
-                onClick={handleRequestSummary}
-                disabled={loading}
-                style={{
-                    marginBottom: error ? SPACING.MEDIUM : SPACING.LARGE,
-                    display: "flex",
-                    alignItems: "center",
-                }}
-            >
-                {loading && (
-                    <ClipLoader
-                        color={COLORS.BUTTON_FOREGROUND}
-                        size={FONT_SIZE.TINY}
-                        cssOverride={{
-                            borderWidth: '2px',
-                            marginRight: SPACING.SMALL
+            <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: SPACING.SMALL,
+                marginBottom: isWandActive ? SPACING.SMALL : (error ? SPACING.MEDIUM : SPACING.LARGE)
+            }}>
+                <VSCodeButton
+                    onClick={handleRequestSummary}
+                    disabled={loading}
+                    style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                    }}
+                >
+                    {loading && (
+                        <ClipLoader
+                            color={COLORS.BUTTON_FOREGROUND}
+                            size={FONT_SIZE.TINY}
+                            cssOverride={{
+                                borderWidth: '2px',
+                                marginRight: SPACING.SMALL
+                            }}
+                        />
+                    )}
+                    {/* Show progress text if loading, otherwise default button text */}
+                    {loading ? loadingText : "Summarize Selected Code"}
+                </VSCodeButton>
+                <VSCodeButton
+                    appearance="icon"
+                    onClick={handleWandToggle}
+                    disabled={loading}
+                    title={isWandActive ? "Deactivate Custom Instruction" : "Activate Custom Instruction"}
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <span className="codicon codicon-wand" style={{ fontSize: "16px" }}></span>
+                </VSCodeButton>
+            </div>
+            {isWandActive && (
+                <div style={{ marginBottom: error ? SPACING.MEDIUM : SPACING.LARGE }}>
+                    <VSCodeTextArea
+                        value={customInstruction}
+                        placeholder="E.g., Focus on security risks"
+                        onInput={(e) => setCustomInstruction((e.target as HTMLTextAreaElement).value)}
+                        rows={2}
+                        style={{
+                            width: "100%",
+                            resize: "vertical"
                         }}
                     />
-                )}
-                {/* Show progress text if loading, otherwise default button text */}
-                {loading ? loadingText : "Summarize Selected Code"}
-            </VSCodeButton>
+                </div>
+            )}
             {error && (
                 <div style={{
                     color: COLORS.ERROR,
