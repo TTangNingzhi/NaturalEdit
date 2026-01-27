@@ -109,26 +109,29 @@ export function NaturalEditContent({ onSectionsChange }: NaturalEditContentProps
                     appearance="icon"
                     onClick={handleWandToggle}
                     disabled={loading}
+                    aria-pressed={isWandActive}
                     title={isWandActive ? "Deactivate Custom Instruction" : "Activate Custom Instruction"}
                     style={{
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        backgroundColor: isWandActive ? "color-mix(in srgb, var(--vscode-focusBorder) 50%, transparent)" : "transparent",
+                        padding: SPACING.TINY,
                     }}
                 >
-                    <span className="codicon codicon-wand" style={{ fontSize: "16px" }}></span>
+                    <span className="codicon codicon-wand" style={{ fontSize: FONT_SIZE.ICON }}></span>
                 </VSCodeButton>
             </div>
             {isWandActive && (
-                <div style={{ marginBottom: error ? SPACING.MEDIUM : SPACING.LARGE }}>
+                <div style={{ marginTop: SPACING.SMALL, marginBottom: SPACING.SMALL }}>
                     <VSCodeTextArea
                         value={customInstruction}
-                        placeholder="E.g., Focus on security risks"
+                        placeholder="Enter your custom instructions, e.g., focus on security risks"
                         onInput={(e) => setCustomInstruction((e.target as HTMLTextAreaElement).value)}
-                        rows={2}
+                        rows={1}
                         style={{
                             width: "100%",
-                            resize: "vertical"
+                            fontSize: FONT_SIZE.SMALL,
                         }}
                     />
                 </div>
