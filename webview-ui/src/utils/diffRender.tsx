@@ -47,6 +47,7 @@ export function renderDiffedText(oldText: string, newText: string): React.ReactN
  * @param mappings The summary code mappings to highlight.
  * @param activeMappingIndex The currently active mapping index (for hover effect).
  * @param onMappingHover Callback for mapping hover.
+ * @param onMappingClick Callback for mapping click.
  * @returns A React node with diffed and mapping-highlighted rendering.
  */
 export function renderDiffedTextWithMapping(
@@ -54,7 +55,8 @@ export function renderDiffedTextWithMapping(
   newText: string,
   mappings: (SummaryCodeMapping & { disambigIndex?: number })[] = [],
   activeMappingIndex?: number | null,
-  onMappingHover?: (index: number | null) => void
+  onMappingHover?: (index: number | null) => void,
+  onMappingClick?: (index: number) => void
 ): React.ReactNode {
   // --- Step 1: Compute diff regions in newText ---
   // Each region: { start, end, type: "equal" | "insert" }
@@ -178,6 +180,7 @@ export function renderDiffedTextWithMapping(
           style={style}
           onMouseEnter={() => onMappingHover && onMappingHover(mappingIndex)}
           onMouseLeave={() => onMappingHover && onMappingHover(null)}
+          onClick={() => onMappingClick && onMappingClick(mappingIndex)}
         >
           {renderDiffColored(start, end, `map-${mappingIndex}-${start}`)}
         </span>
