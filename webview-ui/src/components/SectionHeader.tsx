@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getFileIcon } from "../utils/fileIcons.js";
 import { FONT_SIZE, COLORS, SPACING, COMMON_STYLES } from "../styles/constants.js";
 import { SectionData } from "../types/sectionTypes.js";
@@ -32,6 +32,11 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
     const { metadata, title, summaryData, createdAt, lines, oldSummaryData } = section;
     const concise = summaryData.low_unstructured;
     const { filename } = metadata;
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+    const [fileButtonHovered, setFileButtonHovered] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const fileButtonRef = useRef<HTMLButtonElement>(null);
 
     const formatTime = (timestamp: number) => {
         const date = new Date(timestamp);
@@ -45,6 +50,42 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
     const getLineRange = (lines: [number, number]) => {
         return `${lines[0]}-${lines[1]}`;
     };
+
+    const menuItems = [
+        { id: "file", label: "File", icon: "codicon-file" },
+        { id: "class", label: "Class", icon: "codicon-symbol-class" },
+        { id: "method", label: "Method", icon: "codicon-symbol-method" }
+    ];
+
+    useEffect(() => {
+        if (!menuOpen) return;
+
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setMenuOpen(false);
+            }
+        };
+
+        const onMouseDown = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (
+                menuRef.current &&
+                !menuRef.current.contains(target) &&
+                fileButtonRef.current &&
+                !fileButtonRef.current.contains(target)
+            ) {
+                setMenuOpen(false);
+            }
+        };
+
+        window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("mousedown", onMouseDown);
+
+        return () => {
+            window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("mousedown", onMouseDown);
+        };
+    }, [menuOpen]);
 
     return (
         <div>
@@ -76,9 +117,28 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     alignItems: "center",
                     fontSize: FONT_SIZE.BODY,
                     color: COLORS.DESCRIPTION,
-                    marginLeft: "auto"
+                    marginLeft: "auto",
+                    position: "relative"
                 }}>
-                    <span style={{ ...COMMON_STYLES.FILE_INFO }}>
+                    <button
+                        ref={fileButtonRef}
+                        type="button"
+                        onClick={event => {
+                            event.stopPropagation();
+                            setMenuOpen(open => !open);
+                        }}
+                        onMouseEnter={() => setFileButtonHovered(true)}
+                        onMouseLeave={() => setFileButtonHovered(false)}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        aria-controls={`section-file-menu-${section.metadata.id}`}
+                        style={{
+                            ...COMMON_STYLES.FILE_INFO,
+                            cursor: "pointer",
+                            backgroundColor: fileButtonHovered ? 'var(--vscode-list-hoverBackground)' : 'var(--vscode-editor-background)',
+                            transition: 'background-color 0.15s ease'
+                        }}
+                    >
                         {(() => {
                             const icon = getFileIcon(filename);
                             return icon.type === 'svg'
@@ -100,6 +160,7 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                         })()}
                         <span style={{
                             fontSize: FONT_SIZE.SMALL,
+                            color: COLORS.FOREGROUND,
                             whiteSpace: "nowrap"
                         }}>
                             {getFileBase(filename)}
@@ -112,7 +173,40 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                         }}>
                             ({getLineRange(lines)})
                         </span>
-                    </span>
+                    </button>
+                    {menuOpen && (
+                        <div
+                            ref={menuRef}
+                            id={`section-file-menu-${section.metadata.id}`}
+                            role="menu"
+                            style={COMMON_STYLES.MENU_PANEL}
+                        >
+                            {menuItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={event => {
+                                        event.stopPropagation();
+                                        setMenuOpen(false);
+                                    }}
+                                    onMouseEnter={() => setHoveredItem(item.id)}
+                                    onMouseLeave={() => setHoveredItem(null)}
+                                    style={{
+                                        ...COMMON_STYLES.MENU_ITEM,
+                                        backgroundColor: hoveredItem === item.id ? 'var(--vscode-list-hoverBackground)' : 'transparent',
+                                        transition: 'background-color 0.15s ease'
+                                    }}
+                                >
+                                    <span className={`codicon ${item.icon}`} style={{
+                                        fontSize: FONT_SIZE.SMALL,
+                                        color: COLORS.ICON
+                                    }} />
+                                    <span>{item.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </span>
             </div>
             {/* Row 2: Title and Delete Button (inline, flex row) */}
