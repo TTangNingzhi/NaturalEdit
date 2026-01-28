@@ -104,6 +104,8 @@ export interface SectionData {
     isCodeValid?: boolean;
     validationError?: string;
     lastValidationTime?: number;
+    // Available scopes list: from innermost (method/class) to outermost (file)
+    availableScopes?: ScopeInfo[];
 }
 
 /**
@@ -172,5 +174,29 @@ export interface ExtractedSectionCodeMessage {
     sectionId: string;
     newCode?: string;
     segmentCount?: number;
+    error?: string;
+}
+/**
+ * Represents an available code scope (File/Class/Method)
+ * Uses AST path for robust code location, not line/column
+ */
+export interface ScopeInfo {
+    type: 'file' | 'class' | 'method';
+    name?: string;
+    /**
+     * AST path for robust scope relocation across code edits
+     * Path format: Array of { type: string; name?: string; index?: number }
+     * This allows backend to relocate scope even if line numbers change
+     */
+    path?: Array<{ type: string; name?: string; index?: number }>;
+}
+
+/**
+ * Message from VSCode containing available scopes for a section
+ */
+export interface AvailableScopesMessage {
+    command: "availableScopes";
+    sectionId: string;
+    scopes: ScopeInfo[];  // List of scopes from innermost to outermost
     error?: string;
 }

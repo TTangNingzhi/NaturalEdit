@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getFileIcon } from "../utils/fileIcons.js";
 import { FONT_SIZE, COLORS, SPACING, COMMON_STYLES } from "../styles/constants.js";
-import { SectionData } from "../types/sectionTypes.js";
+import { SectionData, ScopeInfo } from "../types/sectionTypes.js";
 import { renderDiffedText } from "../utils/diffRender";
 import { vscodeApi } from "../utils/vscodeApi";
 
@@ -51,11 +51,35 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
         return `${lines[0]}-${lines[1]}`;
     };
 
-    const menuItems = [
-        { id: "file", label: "File", icon: "codicon-file" },
-        { id: "class", label: "Class", icon: "codicon-symbol-class" },
-        { id: "method", label: "Method", icon: "codicon-symbol-method" }
-    ];
+    // Reverse the scopes list to show from outermost (file) to innermost (method)
+    // Create a new reversed array to avoid mutating the original
+    const reversedScopes = [...(section.availableScopes || [])].reverse();
+
+    // Directly build menu items from the reversed scopes list
+    const menuItems = reversedScopes.map((scope: ScopeInfo, idx: number) => {
+        let icon = '';
+        let fileIcon: { type: 'svg' | 'codicon'; value: string } | null = null;
+        let label = filename;
+
+        if (scope.type === 'class') {
+            icon = 'codicon-symbol-class';
+            label = scope.name || 'Class';
+        } else if (scope.type === 'method') {
+            icon = 'codicon-symbol-method';
+            label = scope.name || 'Method';
+        } else if (scope.type === 'file') {
+            // Use language-specific file icon (supports both SVG and codicon)
+            fileIcon = getFileIcon(filename);
+        }
+
+        return {
+            id: `${scope.type}-${idx}`,
+            label,
+            icon,
+            fileIcon,
+            scopeInfo: scope
+        };
+    });
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -181,30 +205,80 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                             role="menu"
                             style={COMMON_STYLES.MENU_PANEL}
                         >
-                            {menuItems.map(item => (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={event => {
-                                        event.stopPropagation();
-                                        setMenuOpen(false);
-                                    }}
-                                    onMouseEnter={() => setHoveredItem(item.id)}
-                                    onMouseLeave={() => setHoveredItem(null)}
-                                    style={{
-                                        ...COMMON_STYLES.MENU_ITEM,
-                                        backgroundColor: hoveredItem === item.id ? 'var(--vscode-list-hoverBackground)' : 'transparent',
-                                        transition: 'background-color 0.15s ease'
-                                    }}
-                                >
-                                    <span className={`codicon ${item.icon}`} style={{
-                                        fontSize: FONT_SIZE.SMALL,
-                                        color: COLORS.ICON
-                                    }} />
-                                    <span>{item.label}</span>
-                                </button>
-                            ))}
+                            {menuItems.map(item => {
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={event => {
+                                            event.stopPropagation();
+                                            setMenuOpen(false);
+
+                                            vscodeApi.postMessage({
+                                                command: 'selectScope',
+                                                scopeType: item.id.split('-')[0],  // Extract 'file', 'class', or 'method'
+                                                fullPath: section.metadata.fullPath,
+                                                // Send only AST path for robust relocation
+                                                path: item.scopeInfo.path
+                                            });
+                                        }}
+                                        onMouseEnter={() => setHoveredItem(item.id)}
+                                        onMouseLeave={() => setHoveredItem(null)}
+                                        style={{
+                                            ...COMMON_STYLES.MENU_ITEM,
+                                            backgroundColor: hoveredItem === item.id ? 'var(--vscode-list-hoverBackground)' : 'transparent',
+                                            cursor: 'pointer',
+                                            transition: 'background-color 0.15s ease'
+                                        }}
+                                    >
+                                        {/* Render file icon (supports SVG and codicon) */}
+                                        {item.scopeInfo.type === 'file' ? (
+                                            item.fileIcon ? (
+                                                item.fileIcon.type === 'svg' ? (
+                                                    <img src={item.fileIcon.value} alt="" style={{
+                                                        width: 14,
+                                                        height: 14,
+                                                        verticalAlign: 'middle',
+                                                        display: 'inline-block'
+                                                    }} />
+                                                ) : (
+                                                    <span className={`codicon ${item.fileIcon.value}`} style={{
+                                                        fontSize: FONT_SIZE.SMALL,
+                                                        marginRight: SPACING.TINY,
+                                                        color: COLORS.ICON,
+                                                        verticalAlign: 'middle',
+                                                        display: 'inline-block'
+                                                    }} />
+                                                )
+                                            ) : (
+                                                <span className="codicon codicon-file" style={{
+                                                    fontSize: FONT_SIZE.SMALL,
+                                                    marginRight: SPACING.TINY,
+                                                    color: COLORS.ICON,
+                                                    verticalAlign: 'middle',
+                                                    display: 'inline-block'
+                                                }} />
+                                            )
+                                        ) : (
+                                            /* Render class/method icon */
+                                            <span className={`codicon ${item.icon}`} style={{
+                                                fontSize: FONT_SIZE.SMALL,
+                                                marginRight: SPACING.TINY,
+                                                color:
+                                                    item.scopeInfo.type === 'class' ? 'var(--vscode-symbolIcon-classForeground)' :
+                                                        item.scopeInfo.type === 'method' ? 'var(--vscode-symbolIcon-methodForeground)' :
+                                                            COLORS.ICON,
+                                                verticalAlign: 'middle',
+                                                display: 'inline-block'
+                                            }} />
+                                        )}
+                                        <span>
+                                            {item.label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
                 </span>

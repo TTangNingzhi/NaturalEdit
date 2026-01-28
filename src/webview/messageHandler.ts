@@ -268,6 +268,12 @@ export async function handleMessage(
         case 'extractCurrentSectionCode':
             await handleExtractCurrentSectionCode(message, webviewContainer);
             break;
+        case 'detectAvailableScopes':
+            await handleDetectAvailableScopes(message, webviewContainer);
+            break;
+        case 'selectScope':
+            await handleSelectScope(message);
+            break;
         case 'interactionLog':
             await logInteractionFromFrontend({
                 timestamp: message.timestamp,
@@ -766,6 +772,23 @@ async function handleGetSummary(
             sectionId,
             ...(oldSummaryData ? { oldSummaryData } : {})
         });
+
+        // Automatically detect available scopes for this section
+        if (editor && fullPath) {
+            const selectionStart = editor.selection.start;
+            const selectionEnd = editor.selection.end;
+            // Convert 0-based editor lines to 0-based for AST (which is what findEnclosingScopes expects)
+            setImmediate(() => {
+                handleDetectAvailableScopes({
+                    sectionId,
+                    fullPath,
+                    startLine: selectionStart.line,
+                    startColumn: selectionStart.character,
+                    endLine: selectionEnd.line,
+                    endColumn: selectionEnd.character
+                }, webviewContainer);
+            });
+        }
     } catch (err: any) {
         webviewContainer.webview.postMessage({
             command: 'summaryResult',
@@ -1628,5 +1651,155 @@ async function handleExtractCurrentSectionCode(
             sectionId,
             error: error instanceof Error ? error.message : 'Unknown extraction error'
         });
+    }
+}
+/**
+ * Handle detecting available scopes (File/Class/Method) that wrap the selection
+ * Called when user creates a summary session to show scope options in UI
+ */
+async function handleDetectAvailableScopes(message: any, webviewContainer: vscode.WebviewView | vscode.WebviewPanel) {
+    const { sectionId, fullPath, startLine, startColumn, endLine, endColumn } = message;
+
+    try {
+        const astParser = ASTParser.getInstance();
+
+        // Check if AST is supported for this language
+        if (!astParser.isLanguageSupported(fullPath)) {
+            // AST not supported - return file scope only
+            console.log(`[SCOPE DETECT] AST not supported for ${fullPath}, returning file scope only`);
+            webviewContainer.webview.postMessage({
+                command: 'availableScopes',
+                sectionId,
+                scopes: [{ type: 'file' }]
+            });
+            return;
+        }
+
+        // Read file content
+        const document = await vscode.workspace.openTextDocument(fullPath);
+        const documentText = document.getText();
+
+        // Parse file with AST
+        const tree = astParser.parse(documentText, fullPath);
+        if (!tree) {
+            // Parse failed - return file scope only
+            console.log(`[SCOPE DETECT] AST parsing failed for ${fullPath}, returning file scope only`);
+            webviewContainer.webview.postMessage({
+                command: 'availableScopes',
+                sectionId,
+                scopes: [{ type: 'file' }]
+            });
+            return;
+        }
+
+        // Find enclosing scopes (returns a single list with type attribute)
+        const result = astParser.findEnclosingScopes(tree, startLine, startColumn, endLine, endColumn);
+
+        console.log(`[SCOPE DETECT] Found scopes for section ${sectionId}:`, {
+            scopes: result.scopes?.map(s => `${s.type}${s.name ? `: ${s.name}` : ''}`)
+        });
+
+        // Send results back to frontend (just pass the scopes array as-is)
+        webviewContainer.webview.postMessage({
+            command: 'availableScopes',
+            sectionId,
+            scopes: result.scopes || [{ type: 'file' }]
+        });
+    } catch (error) {
+        console.error(`[SCOPE DETECT] Error detecting scopes:`, error);
+        // On error, still return file scope
+        webviewContainer.webview.postMessage({
+            command: 'availableScopes',
+            sectionId,
+            scopes: [{ type: 'file' }],
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+}
+
+/**
+ * Handle selecting a scope (File/Class/Method) in the editor
+ * Uses AST path for robust scope relocation (handles code edits)
+ * For File scope, selects the entire document
+ */
+async function handleSelectScope(message: any) {
+    const { scopeType, fullPath, path } = message;
+
+    try {
+        // Get active editor or open the file
+        let editor = getLastActiveEditor();
+        if (!editor || editor.document.fileName !== fullPath) {
+            const document = await vscode.workspace.openTextDocument(fullPath);
+            editor = await vscode.window.showTextDocument(document, {
+                preview: false,
+                preserveFocus: false
+            });
+        }
+
+        if (!editor) {
+            console.warn(`[SCOPE SELECT] Could not open editor for ${fullPath}`);
+            return;
+        }
+
+        // Special handling for file scope: select entire document
+        if (scopeType === 'file') {
+            const doc = editor.document;
+            const startPos = new vscode.Position(0, 0);
+            const endPos = new vscode.Position(doc.lineCount - 1, doc.lineAt(doc.lineCount - 1).text.length);
+            const range = new vscode.Range(startPos, endPos);
+
+            editor.selection = new vscode.Selection(range.start, range.end);
+            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+
+            console.log(`[SCOPE SELECT] Selected entire file ${fullPath}`);
+            return;
+        }
+
+        // For class/method scopes, path is required
+        if (!path) {
+            console.error(`[SCOPE SELECT] No AST path provided for scope selection`);
+            return;
+        }
+
+        // Resolve scope using AST path (handles code edits robustly)
+        const astParser = ASTParser.getInstance();
+        const documentText = editor.document.getText();
+        const tree = astParser.parse(documentText, fullPath);
+
+        if (!tree) {
+            console.error(`[SCOPE SELECT] Failed to parse AST for ${fullPath}`);
+            return;
+        }
+
+        // Use flexible path matching to find the node
+        const result = astParser.findNodeByPathFlexible(tree, path);
+        if (!result || !result.node) {
+            console.error(`[SCOPE SELECT] Failed to resolve scope via AST path`);
+            return;
+        }
+
+        const node = result.node;
+        const startLine = node.startPosition.row;
+        const startColumn = node.startPosition.column;
+        const endLine = node.endPosition.row;
+        const endColumn = node.endPosition.column;
+
+        console.log(`[SCOPE SELECT] Resolved ${scopeType} scope via AST path (confidence: ${result.confidence.toFixed(2)})`, {
+            startLine,
+            startColumn,
+            endLine,
+            endColumn
+        });
+
+        // Create selection range with resolved positions
+        const startPos = new vscode.Position(startLine, startColumn);
+        const endPos = new vscode.Position(endLine, endColumn);
+        const range = new vscode.Range(startPos, endPos);
+
+        // Set selection and reveal
+        editor.selection = new vscode.Selection(range.start, range.end);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+    } catch (error) {
+        console.error(`[SCOPE SELECT] Error selecting scope:`, error);
     }
 }

@@ -226,7 +226,45 @@ export class ASTParser {
      * Extract the name/identifier from a node if available
      */
     private extractNodeName(node: any): string | undefined {
-        // Try to find identifier child
+        // Special handling for different node types
+
+        // For method_declaration and method_definition (Java, Python, etc.)
+        if (node.type === 'method_declaration' || node.type === 'method_definition') {
+            // Look for the 'name' child first (most reliable)
+            const nameChild = node.children.find((child: any) => child.type === 'identifier' && child !== node.children[0]);
+            if (nameChild) {
+                return nameChild.text;
+            }
+            // Fallback: find identifier that's not the first one (to skip return type)
+            let foundReturnType = false;
+            for (const child of node.children) {
+                if (child.type === 'identifier' || child.type === 'property_identifier' || child.type === 'type_identifier') {
+                    if (!foundReturnType) {
+                        foundReturnType = true;
+                        continue;  // Skip first identifier (return type)
+                    }
+                    return child.text;  // Return second identifier (method name)
+                }
+            }
+        }
+
+        // For function_declaration (JavaScript, TypeScript, etc.)
+        if (node.type === 'function_declaration' || node.type === 'function_definition') {
+            const nameChild = node.children.find((child: any) => child.type === 'identifier');
+            if (nameChild) {
+                return nameChild.text;
+            }
+        }
+
+        // For class_declaration (Java, TypeScript, etc.)
+        if (node.type === 'class_declaration' || node.type === 'class_definition') {
+            const nameChild = node.children.find((child: any) => child.type === 'identifier' || child.type === 'type_identifier');
+            if (nameChild) {
+                return nameChild.text;
+            }
+        }
+
+        // Generic fallback: find first identifier
         const identifierChild = node.children.find((child: any) =>
             child.type === 'identifier' ||
             child.type === 'property_identifier' ||
@@ -237,7 +275,7 @@ export class ASTParser {
             return identifierChild.text;
         }
 
-        // For some nodes, the name is directly in the node
+        // For nodes that ARE identifiers
         if (node.type === 'identifier' || node.type === 'property_identifier') {
             return node.text;
         }
@@ -481,5 +519,90 @@ export class ASTParser {
      */
     public isInitialized(): boolean {
         return this.initialized;
+    }
+
+    /**
+     * Find the parent scopes (File/Class/Method) that contain the selection
+     * Traverses from bottom to top (innermost to outermost) in the AST
+     * Returns a single list with all scopes in order (innermost first), each with a type attribute
+     * 
+     * @param tree The AST tree
+     * @param startLine 0-based line number
+     * @param startColumn 0-based column number
+     * @param endLine 0-based line number
+     * @param endColumn 0-based column number
+     */
+    public findEnclosingScopes(
+        tree: Parser.Tree,
+        startLine: number,
+        startColumn: number,
+        endLine: number,
+        endColumn: number
+    ): {
+        scopes?: Array<{ type: 'method' | 'class' | 'file'; name?: string; path?: NodePath }>;
+    } {
+        const result: {
+            scopes?: Array<{ type: 'method' | 'class' | 'file'; name?: string; path?: NodePath }>;
+        } = {};
+
+        // Find node at the start of selection
+        const node = tree.rootNode.descendantForPosition({ row: startLine, column: startColumn });
+        if (!node) {
+            // Return file scope only
+            result.scopes = [{ type: 'file' }];
+            return result;
+        }
+
+        // Traverse from current node to root, collecting all scopes
+        const scopes: Array<{ type: 'method' | 'class' | 'file'; name?: string; path?: NodePath }> = [];
+        let current: any = node;
+
+        while (current) {
+            const nodeType = current.type;
+
+            // Check if this is a method/function
+            if (current.type.includes('function') ||
+                current.type.includes('method') ||
+                current.type === 'function_declaration' ||
+                current.type === 'function_definition' ||
+                current.type === 'method_declaration' ||
+                current.type === 'method_definition'
+            ) {
+                const methodName = this.extractNodeName(current);
+                if (methodName) {
+                    const methodPath = this.getNodePath(current);
+                    scopes.push({
+                        type: 'method',
+                        name: methodName,
+                        path: methodPath
+                    });
+                }
+            }
+            // Check if this is a class
+            else if (nodeType === 'class_declaration' ||
+                nodeType === 'class_definition' ||
+                nodeType === 'enum_declaration' ||
+                nodeType === 'interface_declaration' ||
+                (nodeType.includes('class') && (nodeType.includes('declaration') || nodeType.includes('definition')))
+            ) {
+                const className = this.extractNodeName(current);
+                if (className) {
+                    const classPath = this.getNodePath(current);
+                    scopes.push({
+                        type: 'class',
+                        name: className,
+                        path: classPath
+                    });
+                }
+            }
+
+            current = current.parent;
+        }
+
+        // Always add file scope at the end (outermost)
+        scopes.push({ type: 'file' });
+
+        result.scopes = scopes;
+        return result;
     }
 }

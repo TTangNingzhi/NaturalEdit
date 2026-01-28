@@ -7,7 +7,9 @@ import {
     EditResultMessage,
     SectionValidityBatchMessage,
     ExtractedSectionCodeMessage,
-    ASTAnchor
+    AvailableScopesMessage,
+    ASTAnchor,
+    ScopeInfo
 } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
 import { logInteraction } from "../utils/telemetry.js";
@@ -20,6 +22,7 @@ import { logInteraction } from "../utils/telemetry.js";
  * @param onProgress Callback for progress updates (optional)
  * @param getOldSummaryData Function to get old summary data by sectionId (optional)
  * @param onSectionValidityBatch Callback for batch section validity updates (optional)
+ * @param onAvailableScopes Callback for available scopes update (optional)
  */
 export const setupMessageHandler = (
     onError: (error: string) => void,
@@ -27,13 +30,14 @@ export const setupMessageHandler = (
     onEditResult?: (sectionId: string, action: string, newCode: string) => void,
     onProgress?: (stageText: string) => void,
     getOldSummaryData?: (sectionId: string) => SummaryData | undefined,
-    onSectionValidityBatch?: (results: Array<{ sectionId: string; isCodeValid: boolean; validationError?: string }>) => void
+    onSectionValidityBatch?: (results: Array<{ sectionId: string; isCodeValid: boolean; validationError?: string }>) => void,
+    onAvailableScopes?: (sectionId: string, scopes: ScopeInfo[]) => void
 ) => {
     /**
      * Handles incoming messages from VSCode and dispatches to the appropriate callback.
      * Uses discriminated union types for type safety.
      */
-    type MessageFromVSCode = SummaryProgressMessage | SummaryResultMessage | EditResultMessage | SectionValidityBatchMessage | ExtractedSectionCodeMessage;
+    type MessageFromVSCode = SummaryProgressMessage | SummaryResultMessage | EditResultMessage | SectionValidityBatchMessage | ExtractedSectionCodeMessage | AvailableScopesMessage;
 
     // Type guard to check if an object has a string "command" property
     function isVSCodeMessageWithCommand(obj: unknown): obj is { command: string } {
@@ -149,6 +153,12 @@ export const setupMessageHandler = (
                         }
                         requestSummary(msg2.newCode);
                     }
+                }
+                break;
+            case "availableScopes":
+                if (onAvailableScopes) {
+                    const msg2 = msg as AvailableScopesMessage;
+                    onAvailableScopes(msg2.sectionId, msg2.scopes);
                 }
                 break;
             default:
@@ -367,6 +377,16 @@ export const createStatefulMessageHandler = (
                     }
                     return s;
                 })
+            );
+        },
+        // Callback for available scopes update
+        (sectionId, scopes) => {
+            setSectionList(prev =>
+                prev.map(s =>
+                    s.metadata.id === sectionId
+                        ? { ...s, availableScopes: scopes }
+                        : s
+                )
             );
         }
     );
