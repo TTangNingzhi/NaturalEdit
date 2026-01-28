@@ -138,5 +138,31 @@ export const COMMON_STYLES = {
         alignItems: 'center',
         fontSize: FONT_SIZE.ICON,
         lineHeight: 1
+    },
+    MENU_PANEL: {
+        position: 'absolute',
+        top: '100%',
+        right: 0,
+        marginTop: SPACING.TINY,
+        background: COLORS.BACKGROUND,
+        border: `1px solid ${COLORS.BORDER}`,
+        borderRadius: BORDER_RADIUS.MEDIUM,
+        padding: SPACING.SMALL,
+        width: 'max-content',
+        zIndex: 20
+    },
+    MENU_ITEM: {
+        display: 'flex',
+        alignItems: 'center',
+        width: '100%',
+        background: 'transparent',
+        border: 'none',
+        color: COLORS.FOREGROUND,
+        fontSize: FONT_SIZE.SMALL,
+        padding: `${SPACING.SMALL} ${SPACING.MEDIUM}`,
+        cursor: 'pointer',
+        borderRadius: BORDER_RADIUS.SMALL,
+        textAlign: 'left',
+        gap: SPACING.SMALL
     }
 } as const;
