@@ -59,14 +59,22 @@ export interface ASTLocateResult {
     /** Whether the code was successfully located */
     found: boolean;
 
-    /** Current line range if found */
+    /** Current line range if found (1-based line numbers) */
     currentLines?: [number, number];
+
+    /** Current position range if found (1-based line, 0-based column) */
+    currentRange?: {
+        startLine: number;
+        startColumn: number;
+        endLine: number;
+        endColumn: number;
+    };
 
     /** Updated code text if found */
     currentCode?: string;
 
-    /** Method used to locate: 'ast-path', 'ast-signature', 'ast-fuzzy', 'text-fallback' */
-    method: 'ast-path' | 'ast-signature' | 'ast-fuzzy' | 'text-fallback' | 'not-found';
+    /** Method used to locate: 'ast-path', 'ast-fuzzy', 'not-found' */
+    method: 'ast-path' | 'ast-fuzzy' | 'not-found';
 
     /** Confidence score 0-1 */
     confidence: number;

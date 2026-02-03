@@ -213,6 +213,12 @@ export class ASTCodeLocator {
                 return {
                     found: true,
                     currentLines: [startLine, endLine],
+                    currentRange: {
+                        startLine: startLine,
+                        startColumn: node.startPosition.column,
+                        endLine: endLine,
+                        endColumn: node.endPosition.column
+                    },
                     currentCode: node.text,
                     method: 'ast-path',
                     confidence
@@ -263,6 +269,12 @@ export class ASTCodeLocator {
                 return {
                     found: true,
                     currentLines: [startLine, endLine],
+                    currentRange: {
+                        startLine: startLine,
+                        startColumn: bestMatch.startPosition.column,
+                        endLine: endLine,
+                        endColumn: bestMatch.endPosition.column
+                    },
                     currentCode: bestMatch.text,
                     method: 'ast-fuzzy',
                     confidence: bestScore

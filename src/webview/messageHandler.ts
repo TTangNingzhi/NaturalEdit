@@ -343,11 +343,15 @@ async function handleHighlightCodeMapping(message: any) {
                     if (locateResult.found && locateResult.currentLines && locateResult.confidence > 0.5) {
                         const oldLine = lineNum + 1;
                         lineNum = locateResult.currentLines[0] - 1;
-                        resolutionMethod = locateResult.method;  // 'ast-path', 'ast-signature', 'ast-fuzzy'
+                        resolutionMethod = locateResult.method;
 
                         console.log(`  [FINAL ACTUAL MAPPING] AST resolution succeeded:`);
                         console.log(`    - Method: ${locateResult.method}`);
                         console.log(`    - Original line: ${oldLine} → Resolved line: ${lineNum + 1}`);
+                        if (locateResult.currentRange) {
+                            const { startLine, startColumn, endLine, endColumn } = locateResult.currentRange;
+                            console.log(`    - Position: ${startLine}:${startColumn}-${endLine}:${endColumn}`);
+                        }
                         console.log(`    - Confidence: ${locateResult.confidence}`);
                         console.log(`    - Code: "${codeText.substring(0, 30)}..."`);
                     } else {
@@ -393,28 +397,55 @@ async function handleHighlightCodeMapping(message: any) {
                 );
             };
 
-            if (locateResult && locateResult.found && locateResult.currentLines) {
-                // Highlight the complete AST node (may span multiple lines)
-                const [startLine, endLine] = locateResult.currentLines;
+            if (locateResult && locateResult.found && locateResult.currentRange) {
+                // Highlight the complete AST node with precise column positions
+                const { startLine, startColumn, endLine, endColumn } = locateResult.currentRange;
 
                 // Validate line numbers are within bounds
                 const maxLine = editor.document.lineCount;
                 if (startLine < 1 || startLine > maxLine || endLine < 1 || endLine > maxLine) {
-                    console.warn(`  [HIGHLIGHT SKIPPED] AST node range ${startLine}-${endLine} out of bounds (max: ${maxLine})`);
+                    console.warn(`  [HIGHLIGHT SKIPPED] AST node range ${startLine}:${startColumn}-${endLine}:${endColumn} out of bounds (max: ${maxLine})`);
                     continue;
                 }
 
                 try {
-                    for (let line = startLine - 1; line <= endLine - 1; line++) {
-                        const range = getLineTrimRange(line);
-                        if (range) {
-                            rangesToAdd.push(range);
+                    if (startLine === endLine) {
+                        // Single line: use exact column positions
+                        const range = new vscode.Range(
+                            new vscode.Position(startLine - 1, startColumn),
+                            new vscode.Position(endLine - 1, endColumn)
+                        );
+                        rangesToAdd.push(range);
+                        console.log(`  [HIGHLIGHT RANGE] Using AST node range: line ${startLine}, columns ${startColumn}-${endColumn}`);
+                    } else {
+                        // Multi-line: first line from startColumn to end, middle lines full, last line from start to endColumn
+                        // First line
+                        const firstLineText = editor.document.lineAt(startLine - 1).text;
+                        rangesToAdd.push(new vscode.Range(
+                            new vscode.Position(startLine - 1, startColumn),
+                            new vscode.Position(startLine - 1, firstLineText.length)
+                        ));
+                        
+                        // Middle lines (trim leading whitespace)
+                        for (let line = startLine; line < endLine - 1; line++) {
+                            const range = getLineTrimRange(line);
+                            if (range) {
+                                rangesToAdd.push(range);
+                            }
                         }
+                        
+                        // Last line
+                        const lastLineText = editor.document.lineAt(endLine - 1).text;
+                        const lastLineStart = Math.max(0, lastLineText.search(/\S/));
+                        rangesToAdd.push(new vscode.Range(
+                            new vscode.Position(endLine - 1, lastLineStart),
+                            new vscode.Position(endLine - 1, endColumn)
+                        ));
+                        
+                        console.log(`  [HIGHLIGHT RANGE] Using AST node range: lines ${startLine}:${startColumn}-${endLine}:${endColumn}`);
                     }
-
-                    console.log(`  [HIGHLIGHT RANGE] Using AST node range (trimmed): lines ${startLine}-${endLine}`);
                 } catch (error) {
-                    console.error(`  [HIGHLIGHT ERROR] Failed to create range for lines ${startLine}-${endLine}:`, error);
+                    console.error(`  [HIGHLIGHT ERROR] Failed to create range for ${startLine}:${startColumn}-${endLine}:${endColumn}:`, error);
                     continue;
                 }
             } else {
