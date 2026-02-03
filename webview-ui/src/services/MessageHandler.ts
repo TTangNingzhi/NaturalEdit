@@ -65,7 +65,8 @@ export const setupMessageHandler = (
                             filename: msg.filename || "unknown",
                             fullPath: msg.fullPath || "",
                             offset: typeof msg.offset === "number" ? msg.offset : 0,
-                            originalCode: msg.originalCode || ""
+                            originalCode: msg.originalCode || "",
+                            astAnchor: msg.astAnchor
                         },
                         lines: (() => {
                             const linesStr = typeof msg.lines === "string" ? msg.lines : "0-0";

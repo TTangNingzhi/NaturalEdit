@@ -277,11 +277,19 @@ ${newCode}
  * Supports multiple, possibly non-contiguous code ranges per summary component.
  * @param code The code to map
  * @param summaryText The summary text (concise, detailed, or a bullet)
+ * @param realStartLine Starting line number in the original file
+ * @param structuralContext Optional AST-derived structural context
  */
 export async function buildSummaryMapping(
     code: string,
     summaryText: string,
-    realStartLine: number = 1
+    realStartLine: number = 1,
+    structuralContext?: {
+        enclosingFunction?: string;
+        enclosingClass?: string;
+        nodeType?: string;
+        nestingLevel?: number;
+    }
 ): Promise<
     {
         summaryComponent: string;
@@ -292,9 +300,25 @@ export async function buildSummaryMapping(
         .split('\n')
         .map((line, idx) => `${idx + realStartLine}: ${line}`)
         .join('\n');
+
+    // Build structural context hint if available
+    let contextHint = '';
+    if (structuralContext) {
+        const parts = [];
+        if (structuralContext.enclosingClass) {
+            parts.push(`inside class "${structuralContext.enclosingClass}"`);
+        }
+        if (structuralContext.enclosingFunction) {
+            parts.push(`inside function "${structuralContext.enclosingFunction}"`);
+        }
+        if (parts.length > 0) {
+            contextHint = `\nStructural Context: This code is ${parts.join(' ')}.\nWhen mapping, consider referencing these structural landmarks for more precise alignment.\n`;
+        }
+    }
+
     const prompt = `
 You are an expert at code-to-summary mapping. Given the following code and summary, extract up to 10 key summary components (phrases or semantic units) from the summary.
-
+${contextHint}
 IMPORTANT:
 1. Each summaryComponent you extract MUST be a substring (exact part) of the summary text below.
 2. Extract summaryComponents in the exact order they appear in the summary text.

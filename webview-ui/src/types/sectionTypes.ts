@@ -1,6 +1,31 @@
 // Types and utilities for section data and summaries
 
 /**
+ * Represents an anchor point in the AST for robust code location
+ */
+export interface ASTAnchor {
+    nodeType: string;
+    nodeName?: string;
+    path: number[];
+    pathTypes: string[];
+    pathNames: string[];
+    signature?: string;
+    originalStartLine: number;
+    originalEndLine: number;
+    originalOffset: number;
+    contentHash?: string;
+}
+
+/**
+ * Reference to a specific AST node for code mapping
+ */
+export interface ASTNodeReference {
+    anchor: ASTAnchor;
+    originalLine: number;
+    originalText: string;
+}
+
+/**
  * Represents the summary data for a code section.
  */
 export type SummaryData = {
@@ -21,7 +46,11 @@ export type SummaryData = {
  */
 export interface SummaryCodeMapping {
     summaryComponent: string;
-    codeSegments: { code: string; line: number }[]; // Each code fragment with its line number
+    codeSegments: {
+        code: string;
+        line: number;
+        astNodeRef?: ASTNodeReference; // AST anchor for robust alignment
+    }[];
 }
 
 export type DetailLevel = "low" | "medium" | "high";
@@ -37,6 +66,7 @@ export interface SectionMetadata {
     fullPath: string;
     offset: number;
     originalCode: string;
+    astAnchor?: ASTAnchor; // AST-based anchor for robust code location
 }
 
 /**
@@ -87,6 +117,7 @@ export interface SummaryResultMessage {
     createdAt?: string;
     originalCode?: string;
     offset?: number;
+    astAnchor?: ASTAnchor; // AST anchor for robust code location
     summaryMappings?: {
         low_unstructured: SummaryCodeMapping[];
         low_structured: SummaryCodeMapping[];

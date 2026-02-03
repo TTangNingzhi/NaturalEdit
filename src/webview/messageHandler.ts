@@ -7,6 +7,9 @@ import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import DiffMatchPatch from 'diff-match-patch';
 import { logInteractionFromFrontend } from '../utils/telemetry';
+import { ASTCodeLocator } from '../utils/astCodeLocator';
+import { ASTMappingProcessor } from '../utils/astMappingProcessor';
+import { ASTAnchor } from '../types/astTypes';
 
 // Color palette for summary-code mapping highlights (must match frontend)
 const SUMMARY_CODE_MAPPING_COLORS = [
@@ -26,6 +29,10 @@ const SUMMARY_CODE_MAPPING_COLORS = [
 // Constants for code matching
 const BITAP_LIMIT = 32;
 const MIN_MATCH_SCORE = 0.9;
+
+// Global AST code locator instance
+const astLocator = new ASTCodeLocator();
+const astMappingProcessor = new ASTMappingProcessor();
 
 // Structured state for the current highlight to avoid races and attach lifecycle disposables
 let currentHighlight: {
@@ -233,6 +240,7 @@ export async function handleMessage(
 /**
  * Handles the highlightCodeMapping command from the webview.
  * Finds the code snippet in the open editor and applies a highlight decoration.
+ * Uses AST node references when available to resolve current line numbers.
  * @param message The message containing codeSnippet, filename/fullPath, colorIndex
  */
 async function handleHighlightCodeMapping(message: any) {
@@ -270,19 +278,46 @@ async function handleHighlightCodeMapping(message: any) {
         const filteredSegments = codeSegments.filter(
             seg => seg && typeof seg.line === "number" && seg.line > 0
         );
+
+        // Process each segment, using AST resolution if available
         for (const seg of filteredSegments) {
-            const lineNum = seg.line - 1;
+            let lineNum = seg.line - 1;
+            let codeText = seg.code;
+
+            // If segment has AST node reference, try to resolve current location
+            if (seg.astNodeRef?.anchor && fullPath) {
+                try {
+                    const locateResult = await astLocator.locateCode(
+                        fullPath,
+                        seg.astNodeRef.originalText,
+                        seg.astNodeRef.anchor.originalOffset,
+                        seg.astNodeRef.anchor
+                    );
+
+                    if (locateResult.found && locateResult.currentLines && locateResult.confidence > 0.5) {
+                        // Use updated line number from AST resolution
+                        lineNum = locateResult.currentLines[0] - 1;
+                        console.log(`[AST-resolved] Line ${seg.line} -> ${lineNum + 1} (confidence: ${locateResult.confidence})`);
+                    }
+                } catch (error) {
+                    console.warn('[highlightCodeMapping] AST resolution failed, using original line:', error);
+                }
+            }
+
             if (lineNum < 0 || lineNum >= editor.document.lineCount) { continue; }
+
             const lineText = editor.document.lineAt(lineNum).text;
             let startChar = 0;
             let endChar = lineText.length;
-            if (typeof seg.code === "string" && seg.code.trim().length > 0) {
-                const idx = lineText.indexOf(seg.code);
+
+            if (typeof codeText === "string" && codeText.trim().length > 0) {
+                const idx = lineText.indexOf(codeText);
                 if (idx !== -1) {
                     startChar = idx;
-                    endChar = idx + seg.code.length;
+                    endChar = idx + codeText.length;
                 }
             }
+
             const start = new vscode.Position(lineNum, startChar);
             const end = new vscode.Position(lineNum, endChar);
             allRanges.push(new vscode.Range(start, end));
@@ -540,20 +575,50 @@ async function handleGetSummary(
             }
         }
 
-        // Run all mappings concurrently, pass realStartLine to buildSummaryMapping
+        // Get structural context from AST if available
+        const structuralContext = fullPath && editor
+            ? await astMappingProcessor.getStructuralContext(
+                fullPath,
+                editor.document.getText(),
+                realStartLine,
+                realStartLine + selectedText.split('\n').length - 1
+            )
+            : undefined;
+
+        // Run all mappings concurrently, pass realStartLine and structural context to buildSummaryMapping
         const mappingPromises = mappingKeys.map(([detail, structured]) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
             const summaryText = (summary as any)[key] || "";
-            return buildSummaryMapping(selectedText, summaryText, realStartLine);
+            return buildSummaryMapping(selectedText, summaryText, realStartLine, structuralContext);
         });
         const mappingResults = await Promise.all(mappingPromises);
+
+        // Post-process mappings to add AST node references
+        const enhancedMappingPromises = mappingResults.map(mapping =>
+            astMappingProcessor.processMappings(mapping, fullPath, editor?.document.getText() || selectedText)
+        );
+        const enhancedMappings = await Promise.all(enhancedMappingPromises);
 
         // Assemble summaryMappings object
         const summaryMappings: Record<string, any[]> = {};
         mappingKeys.forEach(([detail, structured], idx) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
-            summaryMappings[key] = mappingResults[idx];
+            summaryMappings[key] = enhancedMappings[idx];
         });
+
+        // Create AST anchor for this code section
+        let astAnchor;
+        if (editor && fullPath) {
+            const startLine = realStartLine;
+            const endLine = startLine + selectedText.split('\n').length - 1;
+            astAnchor = await astLocator.createAnchor(
+                fullPath,
+                selectedText,
+                startLine,
+                endLine,
+                offset
+            );
+        }
 
         // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({
@@ -567,6 +632,7 @@ async function handleGetSummary(
             originalCode: selectedText,
             offset,
             summaryMappings,
+            astAnchor,
             ...(oldSummaryData ? { oldSummaryData } : {})
         });
     } catch (err: any) {
@@ -826,15 +892,16 @@ async function applyCodeChanges(
 /**
  * Handles the checkSectionValidity command.
  * Checks if the file exists and if the original code can be matched.
+ * Uses AST-based location with fallback to text matching.
  * If matched, opens the file and navigates to the match.
- * @param message The message containing fullPath and originalCode
+ * @param message The message containing fullPath, originalCode, offset, and optional astAnchor
  * @param webviewContainer The webview panel or view instance
  */
 async function handleCheckSectionValidity(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
-    const { fullPath, originalCode } = message;
+    const { fullPath, originalCode, offset, astAnchor } = message;
     if (!fullPath || !originalCode) {
         webviewContainer.webview.postMessage({
             command: 'sectionValidityResult',
@@ -854,31 +921,53 @@ async function handleCheckSectionValidity(
     }
 
     const { document } = fileInfo;
-    const fileText = document.getText();
 
-    // Try to find the best match for the original code
-    const match = findBestMatch(fileText, originalCode, 0);
-    if (match.location === -1) {
+    // Try AST-based location first (if anchor provided), then fallback to text matching
+    try {
+        const locateResult = await astLocator.locateCode(
+            fullPath,
+            originalCode,
+            offset || 0,
+            astAnchor as ASTAnchor | undefined
+        );
+
+        if (!locateResult.found || locateResult.confidence < 0.5) {
+            webviewContainer.webview.postMessage({
+                command: 'sectionValidityResult',
+                status: 'code_not_matched',
+                method: locateResult.method,
+                confidence: locateResult.confidence
+            });
+            return;
+        }
+
+        // If matched, open the file and navigate to the match location
+        try {
+            const editor = await vscode.window.showTextDocument(document, { preview: false });
+            if (locateResult.currentLines) {
+                const [startLine, endLine] = locateResult.currentLines;
+                const start = new vscode.Position(startLine - 1, 0);
+                const end = document.lineAt(Math.min(endLine - 1, document.lineCount - 1)).range.end;
+                editor.selection = new vscode.Selection(start, end);
+                editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+            }
+        } catch (e) {
+            // Ignore navigation errors, still report success
+        }
+
         webviewContainer.webview.postMessage({
             command: 'sectionValidityResult',
-            status: 'code_not_matched'
+            status: 'success',
+            method: locateResult.method,
+            confidence: locateResult.confidence,
+            currentLines: locateResult.currentLines
         });
-        return;
+    } catch (error) {
+        console.error('Error in section validity check:', error);
+        webviewContainer.webview.postMessage({
+            command: 'sectionValidityResult',
+            status: 'code_not_matched',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
-
-    // If matched, open the file and navigate to the match location
-    try {
-        const editor = await vscode.window.showTextDocument(document, { preview: false });
-        const start = document.positionAt(match.location);
-        const end = document.positionAt(match.location + originalCode.length);
-        editor.selection = new vscode.Selection(start, end);
-        editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
-    } catch (e) {
-        // Ignore navigation errors, still report success
-    }
-
-    webviewContainer.webview.postMessage({
-        command: 'sectionValidityResult',
-        status: 'success'
-    });
 }

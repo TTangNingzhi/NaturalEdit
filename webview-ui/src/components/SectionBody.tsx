@@ -135,7 +135,9 @@ const SectionBody: React.FC<SectionBodyProps> = ({
         vscodeApi.postMessage({
             command: "checkSectionValidity",
             fullPath: section.metadata.fullPath,
-            originalCode: section.metadata.originalCode
+            originalCode: section.metadata.originalCode,
+            offset: section.metadata.offset,
+            astAnchor: section.metadata.astAnchor
         });
 
         // Handler for backend response
@@ -156,7 +158,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
         return () => {
             window.removeEventListener("message", handleMessage);
         };
-    }, [section.metadata.fullPath, section.metadata.originalCode]);
+    }, [section.metadata.astAnchor, section.metadata.fullPath, section.metadata.offset, section.metadata.originalCode]);
 
     // Overlay message based on validity status
     let overlayMessage = "";
