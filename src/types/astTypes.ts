@@ -67,11 +67,14 @@ export interface ASTNodeReference {
     /** AST anchor for the node */
     anchor: ASTAnchor;
 
-    /** Original line number when mapping was created (1-based) */
+    /** Original line number when mapping was created (1-based, for logging/debugging) */
     originalLine: number;
 
-    /** Original code text */
+    /** FULL text of the minimal AST node (not LLM fragment) */
     originalText: string;
+
+    /** Optional: The partial text fragment that LLM actually output (for debugging) */
+    llmFragment?: string;
 }
 
 /**

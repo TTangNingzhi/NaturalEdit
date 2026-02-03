@@ -239,9 +239,30 @@ export async function handleMessage(
 
 /**
  * Handles the highlightCodeMapping command from the webview.
- * Finds the code snippet in the open editor and applies a highlight decoration.
- * Uses AST node references when available to resolve current line numbers.
- * @param message The message containing codeSnippet, filename/fullPath, colorIndex
+ * This function visualizes the mapping between summary components and code by highlighting code segments.
+ * 
+ * MAPPING FLOW:
+ * 1. ORIGINAL INTENDED MAPPING: Comes from LLM via codeSegments, each with:
+ *    - code: the code snippet text
+ *    - line: line number from LLM output (1-based)
+ *    - astNodeRef?: optional AST reference for current code location
+ * 
+ * 2. USED REFERENCE INFO:
+ *    - If astNodeRef.anchor exists: Uses AST resolution strategies
+ *      * Strategy 1: AST path matching (confidence > 0.8)
+ *      * Strategy 2: Function signature matching (confidence > 0.7)
+ *      * Strategy 3: Fuzzy AST matching (confidence > 0.6)
+ *      * Strategy 4: Text-based fallback (if AST fails)
+ *    - Otherwise: Uses original line number directly
+ * 
+ * 3. FINAL ACTUAL MAPPING: After resolution, each highlight contains:
+ *    - lineNum: resolved line number (may differ from original if AST moved code)
+ *    - startChar, endChar: position within the line
+ *    - Applied as visual decoration with color based on colorIndex
+ * 
+ * @param message The message containing selectedCode, codeSegments[], colorIndex, filename, fullPath
+ *   - codeSegments: Array of {code, line, astNodeRef?}
+ *   - colorIndex: Which color to use for highlighting
  */
 async function handleHighlightCodeMapping(message: any) {
     await handleClearHighlight();
@@ -253,6 +274,11 @@ async function handleHighlightCodeMapping(message: any) {
     }
 
     const { selectedCode, codeSegments, colorIndex, filename, fullPath } = message;
+    // codeSegments = [
+    //   { code: "let x = 5;", line: 42, astNodeRef?: {anchor, originalLine, originalText} },
+    //   { code: "return x;", line: 45, astNodeRef?: {...} },
+    //   ...
+    // ]
 
     if (typeof selectedCode !== "string" || typeof colorIndex !== "number") {
         console.warn("[highlightCodeMapping] Invalid selectedCode or colorIndex.");
@@ -279,48 +305,151 @@ async function handleHighlightCodeMapping(message: any) {
             seg => seg && typeof seg.line === "number" && seg.line > 0
         );
 
-        // Process each segment, using AST resolution if available
+        // ========== VISUAL MAPPING RESOLUTION LOOP ==========
+        // For each segment from the LLM mapping, resolve its current location in the code
         for (const seg of filteredSegments) {
-            let lineNum = seg.line - 1;
-            let codeText = seg.code;
+            // STEP 1: ORIGINAL INTENDED MAPPING
+            // This is what the LLM generated:
+            console.log(`[VISUAL MAPPING] Original mapping: code="${seg.code.substring(0, 30)}..." line=${seg.line}`);
 
-            // If segment has AST node reference, try to resolve current location
+            let lineNum = seg.line - 1;  // Convert to 0-based index
+            let codeText = seg.code;
+            let resolutionMethod = 'original-line';  // Track which method was used
+            let locateResult: any = null;  // Store locate result for later use
+
+            // STEP 2: ATTEMPT AST-BASED RESOLUTION
+            // If the segment has an AST reference, try intelligent resolution strategies
             if (seg.astNodeRef?.anchor && fullPath) {
+                console.log(`  [USED REFERENCE INFO] AST anchor available:`, {
+                    nodeType: seg.astNodeRef.anchor.nodeType,
+                    nodeName: seg.astNodeRef.anchor.nodeName,
+                    originalStartLine: seg.astNodeRef.anchor.originalStartLine,
+                    originalEndLine: seg.astNodeRef.anchor.originalEndLine,
+                    signature: seg.astNodeRef.anchor.signature,
+                    contentHash: seg.astNodeRef.anchor.contentHash?.substring(0, 8) + '...'
+                });
+
                 try {
-                    const locateResult = await astLocator.locateCode(
+                    locateResult = await astLocator.locateCode(
                         fullPath,
                         seg.astNodeRef.originalText,
                         seg.astNodeRef.anchor.originalOffset,
                         seg.astNodeRef.anchor
                     );
 
+                    // STEP 3: FINAL ACTUAL MAPPING (if AST resolution succeeds)
                     if (locateResult.found && locateResult.currentLines && locateResult.confidence > 0.5) {
-                        // Use updated line number from AST resolution
+                        const oldLine = lineNum + 1;
                         lineNum = locateResult.currentLines[0] - 1;
-                        console.log(`[AST-resolved] Line ${seg.line} -> ${lineNum + 1} (confidence: ${locateResult.confidence})`);
+                        resolutionMethod = locateResult.method;  // 'ast-path', 'ast-signature', 'ast-fuzzy'
+
+                        console.log(`  [FINAL ACTUAL MAPPING] AST resolution succeeded:`);
+                        console.log(`    - Method: ${locateResult.method}`);
+                        console.log(`    - Original line: ${oldLine} → Resolved line: ${lineNum + 1}`);
+                        console.log(`    - Confidence: ${locateResult.confidence}`);
+                        console.log(`    - Code: "${codeText.substring(0, 30)}..."`);
+                    } else {
+                        // AST resolution failed or low confidence, fall back to original line
+                        console.log(`  [AST RESOLUTION FAILED] Method: ${locateResult.method}, Confidence: ${locateResult.confidence}`);
+                        console.log(`    - Falling back to original line ${seg.line}`);
+                        resolutionMethod = 'fallback-to-original';
+                        locateResult = null;  // Clear result so we use fallback highlighting
                     }
                 } catch (error) {
-                    console.warn('[highlightCodeMapping] AST resolution failed, using original line:', error);
+                    console.warn(`  [AST RESOLUTION ERROR] Failed to resolve with AST:`, error);
+                    console.log(`    - Falling back to original line ${seg.line}`);
+                    resolutionMethod = 'error-fallback';
+                    locateResult = null;  // Clear result so we use fallback highlighting
+                }
+            } else {
+                // No AST reference available, using line number as-is from LLM
+                console.log(`  [NO AST REFERENCE] Using original line number directly: ${seg.line}`);
+            }
+
+            // STEP 4: CREATE HIGHLIGHT RANGES (TRIM LEADING WHITESPACE PER LINE)
+            // NEW APPROACH: For multi-line ranges, split into per-line ranges and trim tabs/spaces on each line.
+            const rangesToAdd: vscode.Range[] = [];
+
+            const getLineTrimRange = (lineIndex: number, preferredStartChar?: number, preferredEndChar?: number) => {
+                const lineText = editor.document.lineAt(lineIndex).text;
+                const firstNonWhitespace = Math.max(0, lineText.search(/\S/));
+                const lineEnd = lineText.length;
+
+                // If line is empty or whitespace-only, skip it
+                if (lineText.trim().length === 0) {
+                    return null;
+                }
+
+                const startChar = preferredStartChar !== undefined
+                    ? Math.max(preferredStartChar, firstNonWhitespace)
+                    : firstNonWhitespace;
+                const endChar = preferredEndChar !== undefined ? preferredEndChar : lineEnd;
+
+                return new vscode.Range(
+                    new vscode.Position(lineIndex, startChar),
+                    new vscode.Position(lineIndex, Math.max(startChar, endChar))
+                );
+            };
+
+            if (locateResult && locateResult.found && locateResult.currentLines) {
+                // Highlight the complete AST node (may span multiple lines)
+                const [startLine, endLine] = locateResult.currentLines;
+
+                // Validate line numbers are within bounds
+                const maxLine = editor.document.lineCount;
+                if (startLine < 1 || startLine > maxLine || endLine < 1 || endLine > maxLine) {
+                    console.warn(`  [HIGHLIGHT SKIPPED] AST node range ${startLine}-${endLine} out of bounds (max: ${maxLine})`);
+                    continue;
+                }
+
+                try {
+                    for (let line = startLine - 1; line <= endLine - 1; line++) {
+                        const range = getLineTrimRange(line);
+                        if (range) {
+                            rangesToAdd.push(range);
+                        }
+                    }
+
+                    console.log(`  [HIGHLIGHT RANGE] Using AST node range (trimmed): lines ${startLine}-${endLine}`);
+                } catch (error) {
+                    console.error(`  [HIGHLIGHT ERROR] Failed to create range for lines ${startLine}-${endLine}:`, error);
+                    continue;
+                }
+            } else {
+                // Fallback: Highlight within single line based on text search (trim leading whitespace)
+                if (lineNum < 0 || lineNum >= editor.document.lineCount) {
+                    console.warn(`  [HIGHLIGHT SKIPPED] Fallback line ${lineNum + 1} out of bounds`);
+                    continue;
+                }
+
+                const lineText = editor.document.lineAt(lineNum).text;
+                let startChar: number | undefined = undefined;
+                let endChar: number | undefined = undefined;
+
+                if (typeof codeText === "string" && codeText.trim().length > 0) {
+                    const idx = lineText.indexOf(codeText);
+                    if (idx !== -1) {
+                        startChar = idx;
+                        endChar = idx + codeText.length;
+                        console.log(`  [CHARACTER POSITION] Found "${codeText}" at line ${lineNum + 1}, chars ${startChar}-${endChar}`);
+                    } else {
+                        console.warn(`  [CHARACTER POSITION] Could not find "${codeText}" in line ${lineNum + 1}`);
+                    }
+                }
+
+                const range = getLineTrimRange(lineNum, startChar, endChar);
+                if (range) {
+                    rangesToAdd.push(range);
                 }
             }
 
-            if (lineNum < 0 || lineNum >= editor.document.lineCount) { continue; }
-
-            const lineText = editor.document.lineAt(lineNum).text;
-            let startChar = 0;
-            let endChar = lineText.length;
-
-            if (typeof codeText === "string" && codeText.trim().length > 0) {
-                const idx = lineText.indexOf(codeText);
-                if (idx !== -1) {
-                    startChar = idx;
-                    endChar = idx + codeText.length;
-                }
+            // STEP 5: ADD HIGHLIGHT TO COLLECTION
+            allRanges.push(...rangesToAdd);
+            if (rangesToAdd.length > 0) {
+                const first = rangesToAdd[0];
+                const last = rangesToAdd[rangesToAdd.length - 1];
+                console.log(`  [HIGHLIGHT CREATED] Resolution method: ${resolutionMethod}, Range: ${first.start.line + 1}:${first.start.character}-${last.end.line + 1}:${last.end.character}`);
             }
-
-            const start = new vscode.Position(lineNum, startChar);
-            const end = new vscode.Position(lineNum, endChar);
-            allRanges.push(new vscode.Range(start, end));
         }
     }
 
@@ -546,6 +675,13 @@ async function handleGetSummary(
             offset = editor.document.offsetAt(editor.selection.start);
         }
 
+        // ========== SUMMARY MAPPING GENERATION PIPELINE ==========
+        // This section creates mappings that link summary components to code segments.
+        // The mapping goes through multiple transformations:
+        // 1. LLM generates raw mappings with line numbers
+        // 2. AST processor adds structural references
+        // 3. Final result sent to webview for visualization
+
         // Stage 2+: Build mapping for all 6 summary types (concurrent)
         const mappingKeys = [
             ["low", "unstructured"],
@@ -562,6 +698,7 @@ async function handleGetSummary(
             stageText: 'Mapping all summaries...'
         });
 
+        // STEP 1: DETERMINE CODE ANCHOR POSITION
         // Compute real start line (1-based) for mapping anchor
         let realStartLine = 1;
         if (editor) {
@@ -574,8 +711,10 @@ async function handleGetSummary(
                 realStartLine = editor.selection.start.line + 1;
             }
         }
+        console.log(`[SUMMARY MAPPING] Anchor code section at line ${realStartLine}`);
 
-        // Get structural context from AST if available
+        // STEP 2: EXTRACT STRUCTURAL CONTEXT FROM AST
+        // This context helps the LLM understand code structure for better mappings
         const structuralContext = fullPath && editor
             ? await astMappingProcessor.getStructuralContext(
                 fullPath,
@@ -585,28 +724,67 @@ async function handleGetSummary(
             )
             : undefined;
 
-        // Run all mappings concurrently, pass realStartLine and structural context to buildSummaryMapping
+        if (structuralContext) {
+            console.log(`[SUMMARY MAPPING] Structural context:`, {
+                enclosingFunction: structuralContext.enclosingFunction,
+                enclosingClass: structuralContext.enclosingClass,
+                nodeType: structuralContext.nodeType,
+                nestingLevel: structuralContext.nestingLevel
+            });
+        }
+
+        // STEP 3: LLM GENERATES ORIGINAL INTENDED MAPPINGS
+        // For each summary detail level, call LLM to generate code-to-summary mappings
+        // buildSummaryMapping:
+        //   INPUT:  selectedText (code), summaryText, realStartLine, structuralContext
+        //   OUTPUT: Array<{summaryComponent, codeSegments: [{code, line}]}>
+        //   - "line" values are from LLM's analysis of the code
         const mappingPromises = mappingKeys.map(([detail, structured]) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
             const summaryText = (summary as any)[key] || "";
+            console.log(`[ORIGINAL MAPPING] Calling LLM for ${detail}_${structured}: "${summaryText.substring(0, 50)}..."`);
             return buildSummaryMapping(selectedText, summaryText, realStartLine, structuralContext);
         });
         const mappingResults = await Promise.all(mappingPromises);
 
-        // Post-process mappings to add AST node references
+        console.log(`[ORIGINAL MAPPING] Received ${mappingResults.length} mapping results from LLM`);
+        mappingResults.forEach((result, idx) => {
+            console.log(`  - Mapping ${idx}: ${result.length} components`);
+            result.forEach(r => {
+                console.log(`    * "${r.summaryComponent}": ${r.codeSegments.length} code segments at lines [${r.codeSegments.map(s => s.line).join(', ')}]`);
+            });
+        });
+
+        // STEP 4: AST POST-PROCESSING TO ADD NODE REFERENCES
+        // Convert LLM line-based mappings into AST-aware references
+        // astMappingProcessor.processMappings:
+        //   INPUT:  LLM mappings with line numbers
+        //   OUTPUT: Same mappings enhanced with astNodeRef for each code segment
+        //   - For each code segment, creates an AST anchor capturing structural info
+        //   - This allows later resolution even if code moves slightly
+        console.log(`[AST POST-PROCESSING] Adding AST node references to all mappings...`);
         const enhancedMappingPromises = mappingResults.map(mapping =>
             astMappingProcessor.processMappings(mapping, fullPath, editor?.document.getText() || selectedText)
         );
         const enhancedMappings = await Promise.all(enhancedMappingPromises);
 
-        // Assemble summaryMappings object
+        console.log(`[AST POST-PROCESSING] Completed: each segment now has astNodeRef with:`, {
+            anchor: "path, types, names, signature, originalStartLine, originalEndLine, contentHash",
+            originalLine: "line number from LLM",
+            originalText: "code text from LLM"
+        });
+
+        // STEP 5: ASSEMBLE FINAL SUMMARY MAPPINGS OBJECT
+        // Group all enhanced mappings by detail level and structure type
         const summaryMappings: Record<string, any[]> = {};
         mappingKeys.forEach(([detail, structured], idx) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
             summaryMappings[key] = enhancedMappings[idx];
+            console.log(`[FINAL MAPPING] ${key}: ${enhancedMappings[idx].length} components with AST references`);
         });
 
-        // Create AST anchor for this code section
+        // STEP 6: CREATE AST ANCHOR FOR ENTIRE CODE SECTION
+        // Store structural information about the selected code for future reference
         let astAnchor;
         if (editor && fullPath) {
             const startLine = realStartLine;
@@ -618,7 +796,29 @@ async function handleGetSummary(
                 endLine,
                 offset
             );
+            console.log(`[AST ANCHOR] Created for section at lines ${startLine}-${endLine}:`, {
+                nodeType: astAnchor?.nodeType,
+                nodeName: astAnchor?.nodeName,
+                pathLength: astAnchor?.path.length,
+                signature: astAnchor?.signature
+            });
         }
+
+        // STEP 7: SEND COMPLETE RESULT TO WEBVIEW
+        // The webview receives:
+        // 1. summary: Plain text summaries for all detail/structure combinations
+        // 2. summaryMappings: Code segment locations with:
+        //    - Original mapping from LLM (codeSegments with line numbers)
+        //    - AST references (astNodeRef in each segment)
+        //    - Summary components (what each mapping represents)
+        // 3. astAnchor: Structural anchor for the entire code section
+        // 4. originalCode: The code that was summarized
+        // 5. offset: Character offset in the file
+        // 
+        // When user hovers over a summary component, webview sends highlightCodeMapping with:
+        // - codeSegments from summaryMappings (includes line numbers and astNodeRef)
+        // - This triggers AST resolution to find current locations before highlighting
+        console.log(`[SENDING RESULT] Sending to webview with summaryMappings keys:`, Object.keys(summaryMappings));
 
         // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({

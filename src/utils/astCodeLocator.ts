@@ -2,10 +2,9 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { ASTParser } from './astParser';
 import { ASTAnchor, ASTLocateResult } from '../types/astTypes';
-import DiffMatchPatch from 'diff-match-patch';
 
 /**
- * Locates code in files using AST-based anchoring with fallback to text matching
+ * Locates code in files using purely AST-based strategies (no text matching fallback)
  */
 export class ASTCodeLocator {
     private parser: ASTParser;
@@ -124,13 +123,14 @@ export class ASTCodeLocator {
                 }
             }
 
-            // Strategy 4: Fallback to text-based matching
-            const textResult = await this.locateByText(
-                currentContent,
-                originalCode,
-                offset
-            );
-            return textResult;
+            // All AST strategies failed - return failure (no text fallback)
+            console.warn('[ASTCodeLocator] All AST strategies failed for code location');
+            return {
+                found: false,
+                method: 'not-found',
+                confidence: 0,
+                error: 'All AST strategies failed to locate the code'
+            };
 
         } catch (error) {
             console.error('Error locating code:', error);
@@ -172,6 +172,7 @@ export class ASTCodeLocator {
             const confidence = this.calculateNodeMatchConfidence(node, anchor);
 
             if (confidence > 0.8) {
+                // Convert from 0-based row to 1-based line number
                 const startLine = node.startPosition.row + 1;
                 const endLine = node.endPosition.row + 1;
 
@@ -222,6 +223,7 @@ export class ASTCodeLocator {
             const confidence = signatureMatch ? 0.9 : 0.5;
 
             if (confidence > 0.7) {
+                // Convert from 0-based row to 1-based line number
                 const startLine = node.startPosition.row + 1;
                 const endLine = node.endPosition.row + 1;
 
@@ -271,6 +273,7 @@ export class ASTCodeLocator {
             }
 
             if (bestMatch && bestScore > 0.6) {
+                // Convert from 0-based row to 1-based line number
                 const startLine = bestMatch.startPosition.row + 1;
                 const endLine = bestMatch.endPosition.row + 1;
 
@@ -287,59 +290,6 @@ export class ASTCodeLocator {
         } catch (error) {
             console.error('Error in fuzzy AST location:', error);
             return { found: false, method: 'ast-fuzzy', confidence: 0 };
-        }
-    }
-
-    /**
-     * Strategy 4: Text-based fallback using existing fuzzy matching
-     */
-    private async locateByText(
-        content: string,
-        originalCode: string,
-        offset: number
-    ): Promise<ASTLocateResult> {
-        try {
-            // Try exact match first
-            let location = content.indexOf(originalCode, offset);
-            let confidence = 1.0;
-
-            // Try fuzzy match if exact fails
-            if (location === -1) {
-                const dmp = new DiffMatchPatch();
-                location = dmp.match_main(content, originalCode, offset);
-                if (location !== -1) {
-                    confidence = 0.8;
-                }
-            }
-
-            if (location !== -1) {
-                // Calculate line numbers from character positions
-                const lines = content.substring(0, location).split('\n');
-                const startLine = lines.length;
-                const endContent = content.substring(0, location + originalCode.length);
-                const endLine = endContent.split('\n').length;
-
-                return {
-                    found: true,
-                    currentLines: [startLine, endLine],
-                    currentCode: content.substring(location, location + originalCode.length),
-                    method: 'text-fallback',
-                    confidence
-                };
-            }
-
-            return {
-                found: false,
-                method: 'text-fallback',
-                confidence: 0
-            };
-        } catch (error) {
-            console.error('Error in text-based location:', error);
-            return {
-                found: false,
-                method: 'text-fallback',
-                confidence: 0
-            };
         }
     }
 
@@ -385,7 +335,8 @@ export class ASTCodeLocator {
     }
 
     /**
-     * Calculate similarity between a candidate node and the anchor
+     * Calculate similarity between a candidate node and the anchor.
+     * Uses PURELY STRUCTURAL matching - no text similarity.
      */
     private calculateNodeSimilarity(
         node: any,
@@ -394,74 +345,25 @@ export class ASTCodeLocator {
     ): number {
         let score = 0;
 
-        // Type match (strong signal)
+        // Type match (strong signal - 40%)
         if (node.type === anchor.nodeType) {
-            score += 0.3;
+            score += 0.4;
         }
 
-        // Name match (strong signal)
+        // Name match (strong signal - 40%)
         const nodeName = this.extractNodeName(node);
         if (nodeName && anchor.nodeName && nodeName === anchor.nodeName) {
-            score += 0.3;
+            score += 0.4;
         }
 
-        // Position proximity (weak signal)
+        // Position proximity (weak signal - 20%)
+        // Nodes closer to original position are slightly preferred
         const lineDiff = Math.abs(node.startPosition.row + 1 - anchor.originalStartLine);
         const proximityScore = Math.max(0, 0.2 * (1 - lineDiff / 100));
         score += proximityScore;
 
-        // Text similarity (medium signal)
-        const textSimilarity = this.calculateTextSimilarity(node.text, originalCode);
-        score += textSimilarity * 0.2;
-
+        // Total: 1.0 for perfect structural match (type + name + same position)
         return score;
-    }
-
-    /**
-     * Calculate text similarity between two strings
-     */
-    private calculateTextSimilarity(text1: string, text2: string): number {
-        // Simple Levenshtein-based similarity
-        const longer = text1.length > text2.length ? text1 : text2;
-        const shorter = text1.length > text2.length ? text2 : text1;
-
-        if (longer.length === 0) {
-            return 1.0;
-        }
-
-        const editDistance = this.levenshteinDistance(longer, shorter);
-        return (longer.length - editDistance) / longer.length;
-    }
-
-    /**
-     * Calculate Levenshtein distance between two strings
-     */
-    private levenshteinDistance(str1: string, str2: string): number {
-        const matrix: number[][] = [];
-
-        for (let i = 0; i <= str2.length; i++) {
-            matrix[i] = [i];
-        }
-
-        for (let j = 0; j <= str1.length; j++) {
-            matrix[0][j] = j;
-        }
-
-        for (let i = 1; i <= str2.length; i++) {
-            for (let j = 1; j <= str1.length; j++) {
-                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-                    matrix[i][j] = matrix[i - 1][j - 1];
-                } else {
-                    matrix[i][j] = Math.min(
-                        matrix[i - 1][j - 1] + 1,
-                        matrix[i][j - 1] + 1,
-                        matrix[i - 1][j] + 1
-                    );
-                }
-            }
-        }
-
-        return matrix[str2.length][str1.length];
     }
 
     /**
