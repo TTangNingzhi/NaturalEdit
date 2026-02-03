@@ -1,5 +1,4 @@
 import { ASTParser } from './astParser';
-import { ASTCodeLocator } from './astCodeLocator';
 import { ASTAnchor, ASTNodeReference } from '../types/astTypes';
 
 /**
@@ -7,11 +6,9 @@ import { ASTAnchor, ASTNodeReference } from '../types/astTypes';
  */
 export class ASTMappingProcessor {
     private parser: ASTParser;
-    private locator: ASTCodeLocator;
 
     constructor() {
         this.parser = ASTParser.getInstance();
-        this.locator = new ASTCodeLocator();
     }
 
     /**

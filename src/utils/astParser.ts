@@ -401,7 +401,7 @@ export class ASTParser {
     }
 
     /**
-     * Find node by path
+     * Find node by path (strict matching - all indices and types must match)
      */
     public findNodeByPath(tree: any, nodePath: NodePath): any | null {
         let current: any = tree.rootNode;
@@ -428,6 +428,110 @@ export class ASTParser {
         }
 
         return current;
+    }
+
+    /**
+     * Find node by path with flexible matching
+     * Priority: type > name > position
+     * If exact path doesn't work, tries to find best match at each level
+     * 
+     * @returns {node, confidence} where confidence indicates match quality
+     */
+    public findNodeByPathFlexible(tree: any, nodePath: NodePath): { node: any; confidence: number } | null {
+        let current: any = tree.rootNode;
+        let totalConfidence = 1.0;
+        const pathLength = nodePath.indices.length;
+
+        for (let i = 0; i < pathLength; i++) {
+            const expectedIndex = nodePath.indices[i];
+            const expectedType = nodePath.types[i];
+            const expectedName = nodePath.names[i];
+
+            // Try exact match first (type + name + position)
+            if (expectedIndex >= 0 && expectedIndex < current.children.length) {
+                const exactChild = current.children[expectedIndex];
+                if (exactChild && exactChild.type === expectedType) {
+                    const exactName = this.extractNodeName(exactChild);
+                    if (!expectedName || exactName === expectedName) {
+                        // Perfect match at this level
+                        current = exactChild;
+                        continue;
+                    }
+                }
+            }
+
+            // Exact match failed, find best alternative among siblings
+            // Priority: type + name > type + position > type only
+            let bestMatch: any = null;
+            let bestScore = 0;
+            let matchMethod = '';
+
+            for (let j = 0; j < current.children.length; j++) {
+                const candidate = current.children[j];
+                if (!candidate) { continue; }
+
+                let score = 0;
+                let method = '';
+
+                // Check type match (highest priority)
+                if (candidate.type === expectedType) {
+                    score += 0.5; // Base score for type match
+                    method = 'type';
+
+                    // Check name match (second priority)
+                    const candidateName = this.extractNodeName(candidate);
+                    if (expectedName && candidateName === expectedName) {
+                        score += 0.4; // type + name = 0.9
+                        method = 'type+name';
+                    }
+
+                    // Check position proximity (lowest priority)
+                    if (j === expectedIndex) {
+                        score += 0.1; // exact position bonus
+                        method = method === 'type+name' ? 'type+name+pos' : 'type+pos';
+                    } else {
+                        // Slight bonus for being close to expected position
+                        const distance = Math.abs(j - expectedIndex);
+                        const proximityBonus = Math.max(0, 0.05 * (1 - distance / current.children.length));
+                        score += proximityBonus;
+                    }
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = candidate;
+                        matchMethod = method;
+                    }
+                }
+            }
+
+            if (!bestMatch) {
+                // No matching type found at this level, path is broken
+                console.log(`[findNodeByPathFlexible] Failed at level ${i}: no node with type "${expectedType}" found`);
+                return null;
+            }
+
+            // Apply confidence penalty based on match quality
+            if (matchMethod === 'type+name+pos') {
+                // Perfect match, no penalty
+                totalConfidence *= 1.0;
+            } else if (matchMethod === 'type+name') {
+                // Good match (type + name), slight penalty for wrong position
+                totalConfidence *= 0.95;
+                console.log(`[findNodeByPathFlexible] Level ${i}: matched by type+name (expected pos ${expectedIndex}, found at ${current.children.indexOf(bestMatch)})`);
+            } else if (matchMethod === 'type+pos') {
+                // OK match (type + position), penalty for wrong name
+                totalConfidence *= 0.85;
+                console.log(`[findNodeByPathFlexible] Level ${i}: matched by type+pos (name mismatch)`);
+            } else {
+                // Weak match (type only)
+                totalConfidence *= 0.75;
+                console.log(`[findNodeByPathFlexible] Level ${i}: matched by type only`);
+            }
+
+            current = bestMatch;
+        }
+
+        return { node: current, confidence: totalConfidence };
     }
 
     /**

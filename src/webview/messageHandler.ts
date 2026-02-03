@@ -310,9 +310,7 @@ async function handleHighlightCodeMapping(message: any) {
             // This is what the LLM generated:
             console.log(`[VISUAL MAPPING] Original mapping: code="${seg.code.substring(0, 30)}..." line=${seg.line}`);
 
-            let lineNum = seg.line - 1;  // Convert to 0-based index
             let codeText = seg.code;
-            let resolutionMethod = 'original-line';  // Track which method was used
             let locateResult: any = null;  // Store locate result for later use
 
             // STEP 2: ATTEMPT AST-BASED RESOLUTION
@@ -341,13 +339,11 @@ async function handleHighlightCodeMapping(message: any) {
 
                     // STEP 3: FINAL ACTUAL MAPPING (if AST resolution succeeds)
                     if (locateResult.found && locateResult.currentLines && locateResult.confidence > 0.5) {
-                        const oldLine = lineNum + 1;
-                        lineNum = locateResult.currentLines[0] - 1;
-                        resolutionMethod = locateResult.method;
+                        const oldLine = seg.line;
 
                         console.log(`  [FINAL ACTUAL MAPPING] AST resolution succeeded:`);
                         console.log(`    - Method: ${locateResult.method}`);
-                        console.log(`    - Original line: ${oldLine} → Resolved line: ${lineNum + 1}`);
+                        console.log(`    - Original line: ${oldLine} → Resolved line: ${locateResult.currentLines[0]}`);
                         if (locateResult.currentRange) {
                             const { startLine, startColumn, endLine, endColumn } = locateResult.currentRange;
                             console.log(`    - Position: ${startLine}:${startColumn}-${endLine}:${endColumn}`);
@@ -355,21 +351,19 @@ async function handleHighlightCodeMapping(message: any) {
                         console.log(`    - Confidence: ${locateResult.confidence}`);
                         console.log(`    - Code: "${codeText.substring(0, 30)}..."`);
                     } else {
-                        // AST resolution failed or low confidence, fall back to original line
+                        // AST resolution failed or low confidence, skip visualization
                         console.log(`  [AST RESOLUTION FAILED] Method: ${locateResult.method}, Confidence: ${locateResult.confidence}`);
-                        console.log(`    - Falling back to original line ${seg.line}`);
-                        resolutionMethod = 'fallback-to-original';
-                        locateResult = null;  // Clear result so we use fallback highlighting
+                        console.log(`    - Skipping highlight for this segment`);
+                        locateResult = null;
                     }
                 } catch (error) {
                     console.warn(`  [AST RESOLUTION ERROR] Failed to resolve with AST:`, error);
-                    console.log(`    - Falling back to original line ${seg.line}`);
-                    resolutionMethod = 'error-fallback';
-                    locateResult = null;  // Clear result so we use fallback highlighting
+                    console.log(`    - Skipping highlight for this segment`);
+                    locateResult = null;
                 }
             } else {
-                // No AST reference available, using line number as-is from LLM
-                console.log(`  [NO AST REFERENCE] Using original line number directly: ${seg.line}`);
+                // No AST reference available, skip visualization
+                console.log(`  [NO AST REFERENCE] Skipping highlight for line ${seg.line}`);
             }
 
             // STEP 4: CREATE HIGHLIGHT RANGES (TRIM LEADING WHITESPACE PER LINE)
@@ -425,7 +419,7 @@ async function handleHighlightCodeMapping(message: any) {
                             new vscode.Position(startLine - 1, startColumn),
                             new vscode.Position(startLine - 1, firstLineText.length)
                         ));
-                        
+
                         // Middle lines (trim leading whitespace)
                         for (let line = startLine; line < endLine - 1; line++) {
                             const range = getLineTrimRange(line);
@@ -433,7 +427,7 @@ async function handleHighlightCodeMapping(message: any) {
                                 rangesToAdd.push(range);
                             }
                         }
-                        
+
                         // Last line
                         const lastLineText = editor.document.lineAt(endLine - 1).text;
                         const lastLineStart = Math.max(0, lastLineText.search(/\S/));
@@ -441,7 +435,7 @@ async function handleHighlightCodeMapping(message: any) {
                             new vscode.Position(endLine - 1, lastLineStart),
                             new vscode.Position(endLine - 1, endColumn)
                         ));
-                        
+
                         console.log(`  [HIGHLIGHT RANGE] Using AST node range: lines ${startLine}:${startColumn}-${endLine}:${endColumn}`);
                     }
                 } catch (error) {
@@ -449,31 +443,8 @@ async function handleHighlightCodeMapping(message: any) {
                     continue;
                 }
             } else {
-                // Fallback: Highlight within single line based on text search (trim leading whitespace)
-                if (lineNum < 0 || lineNum >= editor.document.lineCount) {
-                    console.warn(`  [HIGHLIGHT SKIPPED] Fallback line ${lineNum + 1} out of bounds`);
-                    continue;
-                }
-
-                const lineText = editor.document.lineAt(lineNum).text;
-                let startChar: number | undefined = undefined;
-                let endChar: number | undefined = undefined;
-
-                if (typeof codeText === "string" && codeText.trim().length > 0) {
-                    const idx = lineText.indexOf(codeText);
-                    if (idx !== -1) {
-                        startChar = idx;
-                        endChar = idx + codeText.length;
-                        console.log(`  [CHARACTER POSITION] Found "${codeText}" at line ${lineNum + 1}, chars ${startChar}-${endChar}`);
-                    } else {
-                        console.warn(`  [CHARACTER POSITION] Could not find "${codeText}" in line ${lineNum + 1}`);
-                    }
-                }
-
-                const range = getLineTrimRange(lineNum, startChar, endChar);
-                if (range) {
-                    rangesToAdd.push(range);
-                }
+                // No AST result, do not create fallback highlight
+                continue;
             }
 
             // STEP 5: ADD HIGHLIGHT TO COLLECTION
@@ -481,7 +452,7 @@ async function handleHighlightCodeMapping(message: any) {
             if (rangesToAdd.length > 0) {
                 const first = rangesToAdd[0];
                 const last = rangesToAdd[rangesToAdd.length - 1];
-                console.log(`  [HIGHLIGHT CREATED] Resolution method: ${resolutionMethod}, Range: ${first.start.line + 1}:${first.start.character}-${last.end.line + 1}:${last.end.character}`);
+                console.log(`  [HIGHLIGHT CREATED] Range: ${first.start.line + 1}:${first.start.character}-${last.end.line + 1}:${last.end.character}`);
             }
         }
     }

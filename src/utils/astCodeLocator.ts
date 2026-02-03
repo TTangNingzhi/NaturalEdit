@@ -9,7 +9,6 @@ import { ASTAnchor, ASTLocateResult } from '../types/astTypes';
 export class ASTCodeLocator {
     private parser: ASTParser;
     private documentCache: Map<string, { content: string; tree: any; timestamp: number }> = new Map();
-    private readonly CACHE_TTL = 60000; // 1 minute
 
     constructor() {
         this.parser = ASTParser.getInstance();
@@ -119,31 +118,20 @@ export class ASTCodeLocator {
             const document = await vscode.workspace.openTextDocument(filePath);
             const currentContent = document.getText();
 
-            // Strategy 1: Try AST path-based location if anchor exists
+            // Strategy: AST path-based location
             if (astAnchor) {
                 const astResult = await this.locateByASTPath(
                     filePath,
                     currentContent,
                     astAnchor
                 );
-                if (astResult.found && astResult.confidence > 0.8) {
+                if (astResult.found && astResult.confidence > 0) {
                     return astResult;
-                }
-
-                // Strategy 2: Try fuzzy AST matching (find similar nodes)
-                const fuzzyResult = await this.locateByFuzzyAST(
-                    filePath,
-                    currentContent,
-                    astAnchor,
-                    originalCode
-                );
-                if (fuzzyResult.found && fuzzyResult.confidence > 0.6) {
-                    return fuzzyResult;
                 }
             }
 
-            // All AST strategies failed - return failure (no text fallback)
-            console.warn('[ASTCodeLocator] All AST strategies failed for code location');
+            // AST path matching failed - return failure
+            console.warn('[ASTCodeLocator] AST path matching failed for code location');
             return {
                 found: false,
                 method: 'not-found',
@@ -182,30 +170,38 @@ export class ASTCodeLocator {
                 pathNames: anchor.pathNames
             });
 
-            // Try to find node by path
-            const node = this.parser.findNodeByPath(tree, {
+            // Try flexible path matching (prioritizes type > name > position)
+            const flexResult = this.parser.findNodeByPathFlexible(tree, {
                 indices: anchor.path,
                 types: anchor.pathTypes,
                 names: anchor.pathNames
             });
 
-            if (!node) {
-                console.log(`[locateByASTPath] Failed: Could not find node by path`);
+            let node: any = null;
+            let pathConfidence = 0;
+
+            if (flexResult && flexResult.node) {
+                node = flexResult.node;
+                pathConfidence = flexResult.confidence;
+                console.log(`[locateByASTPath] Flexible match found with path confidence: ${pathConfidence.toFixed(3)}`);
+            } else {
+                console.log(`[locateByASTPath] Failed: Could not find node by flexible path matching`);
                 return { found: false, method: 'ast-path', confidence: 0 };
             }
 
-            console.log(`[locateByASTPath] Found node by path:`, {
+            console.log(`[locateByASTPath] Found node:`, {
                 type: node.type,
                 startLine: node.startPosition.row + 1,
                 endLine: node.endPosition.row + 1
             });
 
-            // Verify node characteristics match
-            const confidence = this.calculateNodeMatchConfidence(node, anchor);
+            // Verify node characteristics match and combine with path confidence
+            const nodeConfidence = this.calculateNodeMatchConfidence(node, anchor);
+            const finalConfidence = pathConfidence * nodeConfidence;
 
-            console.log(`[locateByASTPath] Confidence: ${confidence}`);
+            console.log(`[locateByASTPath] Node match confidence: ${nodeConfidence.toFixed(3)}, Final confidence: ${finalConfidence.toFixed(3)}`);
 
-            if (confidence > 0.8) {
+            if (finalConfidence > 0) {
                 // Convert from 0-based row to 1-based line number
                 const startLine = node.startPosition.row + 1;
                 const endLine = node.endPosition.row + 1;
@@ -221,70 +217,14 @@ export class ASTCodeLocator {
                     },
                     currentCode: node.text,
                     method: 'ast-path',
-                    confidence
+                    confidence: finalConfidence
                 };
             }
 
-            return { found: false, method: 'ast-path', confidence };
+            return { found: false, method: 'ast-path', confidence: finalConfidence };
         } catch (error) {
             console.error('Error in AST path location:', error);
             return { found: false, method: 'ast-path', confidence: 0 };
-        }
-    }
-
-    /**
-     * Strategy 2: Fuzzy AST matching - find similar nodes
-     */
-    private async locateByFuzzyAST(
-        filePath: string,
-        content: string,
-        anchor: ASTAnchor,
-        originalCode: string
-    ): Promise<ASTLocateResult> {
-        try {
-            const tree = this.parser.parse(content, filePath);
-            if (!tree) {
-                return { found: false, method: 'ast-fuzzy', confidence: 0 };
-            }
-
-            // Find all nodes of the same minimal type
-            const candidates = this.parser.findNodesByType(tree, anchor.minimalNodeType);
-
-            let bestMatch: any = null;
-            let bestScore = 0;
-
-            for (const candidate of candidates) {
-                const score = this.calculateNodeSimilarity(candidate, anchor, originalCode);
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMatch = candidate;
-                }
-            }
-
-            if (bestMatch && bestScore > 0.6) {
-                // Convert from 0-based row to 1-based line number
-                const startLine = bestMatch.startPosition.row + 1;
-                const endLine = bestMatch.endPosition.row + 1;
-
-                return {
-                    found: true,
-                    currentLines: [startLine, endLine],
-                    currentRange: {
-                        startLine: startLine,
-                        startColumn: bestMatch.startPosition.column,
-                        endLine: endLine,
-                        endColumn: bestMatch.endPosition.column
-                    },
-                    currentCode: bestMatch.text,
-                    method: 'ast-fuzzy',
-                    confidence: bestScore
-                };
-            }
-
-            return { found: false, method: 'ast-fuzzy', confidence: bestScore };
-        } catch (error) {
-            console.error('Error in fuzzy AST location:', error);
-            return { found: false, method: 'ast-fuzzy', confidence: 0 };
         }
     }
 
@@ -298,20 +238,17 @@ export class ASTCodeLocator {
      */
     private calculateNodeMatchConfidence(node: any, anchor: ASTAnchor): number {
         let score = 0;
-        let checks = 0;
 
         // Check MINIMAL node type (always present)
         if (node.type === anchor.minimalNodeType) {
             score += 0.4;
         }
-        checks++;
 
         // Check MINIMAL node name (if both have it)
         const nodeName = this.extractNodeName(node);
         if (nodeName && anchor.minimalNodeName && nodeName === anchor.minimalNodeName) {
             score += 0.4;
         }
-        checks++;
 
         // Check content hash if available
         if (anchor.contentHash) {
@@ -319,41 +256,8 @@ export class ASTCodeLocator {
             if (currentHash === anchor.contentHash) {
                 score += 0.2;
             }
-            checks++;
         }
 
-        return checks > 0 ? score : 0;
-    }
-
-    /**
-     * Calculate similarity between a candidate node and the anchor
-     * Uses PURELY STRUCTURAL matching on minimal node properties
-     */
-    private calculateNodeSimilarity(
-        node: any,
-        anchor: ASTAnchor,
-        originalCode: string
-    ): number {
-        let score = 0;
-
-        // Type match on MINIMAL node (strong signal - 40%)
-        if (node.type === anchor.minimalNodeType) {
-            score += 0.4;
-        }
-
-        // Name match on MINIMAL node (strong signal - 40%)
-        const nodeName = this.extractNodeName(node);
-        if (nodeName && anchor.minimalNodeName && nodeName === anchor.minimalNodeName) {
-            score += 0.4;
-        }
-
-        // Position proximity (weak signal - 20%)
-        // Nodes closer to original position are slightly preferred
-        const lineDiff = Math.abs(node.startPosition.row + 1 - anchor.originalStartLine);
-        const proximityScore = Math.max(0, 0.2 * (1 - lineDiff / 100));
-        score += proximityScore;
-
-        // Total: 1.0 for perfect structural match (type + name + same position)
         return score;
     }
 

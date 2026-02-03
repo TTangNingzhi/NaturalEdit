@@ -73,8 +73,8 @@ export interface ASTLocateResult {
     /** Updated code text if found */
     currentCode?: string;
 
-    /** Method used to locate: 'ast-path', 'ast-fuzzy', 'not-found' */
-    method: 'ast-path' | 'ast-fuzzy' | 'not-found';
+    /** Method used to locate: 'ast-path' or 'not-found' */
+    method: 'ast-path' | 'not-found';
 
     /** Confidence score 0-1 */
     confidence: number;
