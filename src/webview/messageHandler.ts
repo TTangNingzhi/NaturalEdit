@@ -321,12 +321,19 @@ async function handleHighlightCodeMapping(message: any) {
             // If the segment has an AST reference, try intelligent resolution strategies
             if (seg.astNodeRef?.anchor && fullPath) {
                 console.log(`  [USED REFERENCE INFO] AST anchor available:`, {
-                    nodeType: seg.astNodeRef.anchor.nodeType,
-                    nodeName: seg.astNodeRef.anchor.nodeName,
+                    minimalNodeType: seg.astNodeRef.anchor.minimalNodeType,
+                    minimalNodeName: seg.astNodeRef.anchor.minimalNodeName,
+                    meaningfulNodeType: seg.astNodeRef.anchor.meaningfulNodeType,
+                    meaningfulNodeName: seg.astNodeRef.anchor.meaningfulNodeName,
                     originalStartLine: seg.astNodeRef.anchor.originalStartLine,
                     originalEndLine: seg.astNodeRef.anchor.originalEndLine,
                     signature: seg.astNodeRef.anchor.signature,
                     contentHash: seg.astNodeRef.anchor.contentHash?.substring(0, 8) + '...'
+                });
+                console.log(`  [AST PATH]`, {
+                    path: seg.astNodeRef.anchor.path,
+                    pathTypes: seg.astNodeRef.anchor.pathTypes,
+                    pathNames: seg.astNodeRef.anchor.pathNames
                 });
 
                 try {
@@ -797,9 +804,11 @@ async function handleGetSummary(
                 offset
             );
             console.log(`[AST ANCHOR] Created for section at lines ${startLine}-${endLine}:`, {
-                nodeType: astAnchor?.nodeType,
-                nodeName: astAnchor?.nodeName,
+                minimalNodeType: astAnchor?.minimalNodeType,
+                minimalNodeName: astAnchor?.minimalNodeName,
                 pathLength: astAnchor?.path.length,
+                meaningfulNodeType: astAnchor?.meaningfulNodeType,
+                meaningfulNodeName: astAnchor?.meaningfulNodeName,
                 signature: astAnchor?.signature
             });
         }

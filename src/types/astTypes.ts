@@ -4,24 +4,56 @@
 
 /**
  * Represents an anchor point in the AST for robust code location
+ * 
+ * Design (v2):
+ * - path/pathTypes/pathNames: ALWAYS describe the path from root to MINIMAL NODE
+ * - minimalNodeType: Type of the actual smallest node that LLM matched to
+ * - minimalNodeName: Name of the minimal node (if available)
+ * - meaningfulNodeType/Name/signature: OPTIONAL semantic information from a meaningful ancestor
  */
 export interface ASTAnchor {
-    /** Type of the AST node (e.g., 'function_declaration', 'class_declaration') */
-    nodeType: string;
+    /**
+     * Type of the MINIMAL (smallest) AST node that LLM matched to
+     * This is what the path points to
+     */
+    minimalNodeType: string;
 
-    /** Name/identifier of the node (e.g., function name, class name) */
-    nodeName?: string;
+    /**
+     * Name/identifier of the minimal node (optional, may not exist for all node types)
+     */
+    minimalNodeName?: string;
 
-    /** Path from root to this node as array of child indices */
+    /**
+     * Path from root to the MINIMAL NODE as array of child indices
+     * This is the complete, unmodified path - not filtered by any semantic criteria
+     */
     path: number[];
 
-    /** Array of node types along the path for validation */
+    /**
+     * Array of node types along the path to MINIMAL NODE (for validation)
+     */
     pathTypes: string[];
 
-    /** Array of node names along the path for additional validation */
+    /**
+     * Array of node names along the path to MINIMAL NODE (for validation)
+     */
     pathNames: string[];
 
-    /** Function/method signature for additional matching */
+    /**
+     * OPTIONAL: Type of a meaningful ancestor node (e.g., 'function_declaration')
+     * Used only for semantic matching, does NOT affect the path or minimal node
+     */
+    meaningfulNodeType?: string;
+
+    /**
+     * OPTIONAL: Name of the meaningful ancestor node
+     */
+    meaningfulNodeName?: string;
+
+    /**
+     * OPTIONAL: Function/method signature extracted from meaningful ancestor
+     * Used only for signature-based matching in locate strategies
+     */
     signature?: string;
 
     /** Starting line number (1-based) at time of anchor creation */
@@ -33,7 +65,7 @@ export interface ASTAnchor {
     /** Character offset in file at time of anchor creation */
     originalOffset: number;
 
-    /** Hash of the node text for quick staleness check */
+    /** Hash of the minimal node text for quick staleness check */
     contentHash?: string;
 }
 
