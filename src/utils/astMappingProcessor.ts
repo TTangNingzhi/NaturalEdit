@@ -131,9 +131,7 @@ export class ASTMappingProcessor {
 
             console.log(`[AST TRANSFORM] Created anchor:`, {
                 minimalNodeType: anchor.minimalNodeType,
-                pathLength: anchor.path.length,
-                meaningfulNodeType: anchor.meaningfulNodeType,
-                hasSignature: !!anchor.signature
+                pathLength: anchor.path.length
             });
 
             // STEP 3: Return reference with FULL minimal node text
@@ -169,25 +167,11 @@ export class ASTMappingProcessor {
             // STEP 1: Get complete path from root to minimal node
             const minimalNodePath = this.parser.getNodePath(minimalNode);
 
-            // STEP 2: Find meaningful ancestor
-            const meaningfulNode = this.findMeaningfulParent(minimalNode);
-
-            // STEP 3: Extract semantic info from meaningful ancestor (if different)
-            let meaningfulNodeType: string | undefined = undefined;
-            let meaningfulNodeName: string | undefined = undefined;
-            let signature: string | undefined = undefined;
-
-            if (meaningfulNode && meaningfulNode !== minimalNode) {
-                meaningfulNodeType = meaningfulNode.type;
-                meaningfulNodeName = this.extractNodeName(meaningfulNode) ?? undefined;
-                signature = this.parser.getFunctionSignature(meaningfulNode) ?? undefined;
-            }
-
-            // Calculate content hash for minimal node
+            // STEP 2: Calculate content hash for minimal node
             const crypto = require('crypto');
             const contentHash = crypto.createHash('md5').update(minimalNode.text).digest('hex');
 
-            // STEP 4: Build anchor with new structure
+            // STEP 3: Build anchor with minimal node information
             const anchor: ASTAnchor = {
                 // Minimal node fields (ALWAYS present)
                 minimalNodeType: minimalNode.type,
@@ -197,11 +181,6 @@ export class ASTMappingProcessor {
                 path: minimalNodePath.indices,
                 pathTypes: minimalNodePath.types,
                 pathNames: minimalNodePath.names,
-
-                // Meaningful ancestor fields (OPTIONAL)
-                meaningfulNodeType,
-                meaningfulNodeName,
-                signature,
 
                 // Metadata
                 originalStartLine: minimalNode.startPosition.row + 1,
@@ -215,37 +194,6 @@ export class ASTMappingProcessor {
             console.error('Error creating anchor from node:', error);
             return undefined;
         }
-    }
-
-    /**
-     * Find the most meaningful parent node (function, class, etc.)
-     */
-    private findMeaningfulParent(node: any): any {
-        const meaningfulTypes = new Set([
-            'function_declaration',
-            'method_definition',
-            'arrow_function',
-            'function_expression',
-            'class_declaration',
-            'interface_declaration',
-            'type_alias_declaration',
-            'variable_declaration',
-            'lexical_declaration',
-            'expression_statement',
-            'if_statement',
-            'for_statement',
-            'while_statement'
-        ]);
-
-        let current = node;
-        while (current) {
-            if (meaningfulTypes.has(current.type)) {
-                return current;
-            }
-            current = current.parent;
-        }
-
-        return node;
     }
 
     /**

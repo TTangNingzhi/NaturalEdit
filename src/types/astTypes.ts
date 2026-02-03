@@ -39,23 +39,6 @@ export interface ASTAnchor {
      */
     pathNames: string[];
 
-    /**
-     * OPTIONAL: Type of a meaningful ancestor node (e.g., 'function_declaration')
-     * Used only for semantic matching, does NOT affect the path or minimal node
-     */
-    meaningfulNodeType?: string;
-
-    /**
-     * OPTIONAL: Name of the meaningful ancestor node
-     */
-    meaningfulNodeName?: string;
-
-    /**
-     * OPTIONAL: Function/method signature extracted from meaningful ancestor
-     * Used only for signature-based matching in locate strategies
-     */
-    signature?: string;
-
     /** Starting line number (1-based) at time of anchor creation */
     originalStartLine: number;
 

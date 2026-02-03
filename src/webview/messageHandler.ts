@@ -250,9 +250,7 @@ export async function handleMessage(
  * 2. USED REFERENCE INFO:
  *    - If astNodeRef.anchor exists: Uses AST resolution strategies
  *      * Strategy 1: AST path matching (confidence > 0.8)
- *      * Strategy 2: Function signature matching (confidence > 0.7)
- *      * Strategy 3: Fuzzy AST matching (confidence > 0.6)
- *      * Strategy 4: Text-based fallback (if AST fails)
+ *      * Strategy 2: Fuzzy AST matching (confidence > 0.6)
  *    - Otherwise: Uses original line number directly
  * 
  * 3. FINAL ACTUAL MAPPING: After resolution, each highlight contains:
@@ -323,11 +321,8 @@ async function handleHighlightCodeMapping(message: any) {
                 console.log(`  [USED REFERENCE INFO] AST anchor available:`, {
                     minimalNodeType: seg.astNodeRef.anchor.minimalNodeType,
                     minimalNodeName: seg.astNodeRef.anchor.minimalNodeName,
-                    meaningfulNodeType: seg.astNodeRef.anchor.meaningfulNodeType,
-                    meaningfulNodeName: seg.astNodeRef.anchor.meaningfulNodeName,
                     originalStartLine: seg.astNodeRef.anchor.originalStartLine,
                     originalEndLine: seg.astNodeRef.anchor.originalEndLine,
-                    signature: seg.astNodeRef.anchor.signature,
                     contentHash: seg.astNodeRef.anchor.contentHash?.substring(0, 8) + '...'
                 });
                 console.log(`  [AST PATH]`, {
@@ -776,7 +771,7 @@ async function handleGetSummary(
         const enhancedMappings = await Promise.all(enhancedMappingPromises);
 
         console.log(`[AST POST-PROCESSING] Completed: each segment now has astNodeRef with:`, {
-            anchor: "path, types, names, signature, originalStartLine, originalEndLine, contentHash",
+            anchor: "path, types, names, originalStartLine, originalEndLine, contentHash",
             originalLine: "line number from LLM",
             originalText: "code text from LLM"
         });
@@ -806,10 +801,7 @@ async function handleGetSummary(
             console.log(`[AST ANCHOR] Created for section at lines ${startLine}-${endLine}:`, {
                 minimalNodeType: astAnchor?.minimalNodeType,
                 minimalNodeName: astAnchor?.minimalNodeName,
-                pathLength: astAnchor?.path.length,
-                meaningfulNodeType: astAnchor?.meaningfulNodeType,
-                meaningfulNodeName: astAnchor?.meaningfulNodeName,
-                signature: astAnchor?.signature
+                pathLength: astAnchor?.path.length
             });
         }
 

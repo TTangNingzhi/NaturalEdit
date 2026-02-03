@@ -431,33 +431,6 @@ export class ASTParser {
     }
 
     /**
-     * Get function signature for a function node
-     */
-    public getFunctionSignature(node: any): string | null {
-        if (!node || !node.type) {
-            return null;
-        }
-
-        if (!node.type.includes('function') && !node.type.includes('method')) {
-            return null;
-        }
-
-        const name = this.extractNodeName(node);
-
-        // Try to extract parameters
-        const paramsNode = node.children.find((child: any) =>
-            child.type === 'formal_parameters' ||
-            child.type === 'parameters'
-        );
-
-        if (name && paramsNode) {
-            return `${name}${paramsNode.text}`;
-        }
-
-        return name ?? null;
-    }
-
-    /**
      * Check if parser is initialized
      */
     public isInitialized(): boolean {

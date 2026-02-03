@@ -18,12 +18,10 @@ export class ASTCodeLocator {
     /**
      * Create an AST anchor for a code region
      * 
-     * NEW LOGIC:
+     * LOGIC:
      * 1. Find the minimal node at startLine (the actual smallest AST node)
      * 2. Calculate the COMPLETE path from root to this minimal node
-     * 3. Find any meaningful ancestor (if one exists above the minimal node)
-     * 4. Extract semantic info (signature, type, name) from meaningful ancestor
-     * 5. Return anchor with minimalNode fields + optional meaningful ancestor fields
+     * 3. Return anchor with minimalNode fields and path information
      */
     public async createAnchor(
         filePath: string,
@@ -73,26 +71,10 @@ export class ASTCodeLocator {
             // This path is not filtered by any semantic criteria
             const minimalNodePath = this.parser.getNodePath(minimalNode);
 
-            // STEP 3: Find meaningful ancestor (optional)
-            // Look for a semantically meaningful parent node above the minimal node
-            const meaningfulNode = this.findMeaningfulParent(minimalNode);
-
-            // STEP 4: Extract semantic information from meaningful ancestor (if different from minimal)
-            let meaningfulNodeType: string | undefined = undefined;
-            let meaningfulNodeName: string | undefined = undefined;
-            let signature: string | undefined = undefined;
-
-            if (meaningfulNode && meaningfulNode !== minimalNode) {
-                // Only populate meaningful fields if we found a different ancestor
-                meaningfulNodeType = meaningfulNode.type;
-                meaningfulNodeName = this.extractNodeName(meaningfulNode) ?? undefined;
-                signature = this.parser.getFunctionSignature(meaningfulNode) ?? undefined;
-            }
-
-            // Calculate content hash for minimal node
+            // STEP 3: Calculate content hash for minimal node
             const contentHash = this.hashContent(minimalNode.text);
 
-            // STEP 5: Build anchor with all fields
+            // STEP 4: Build anchor with minimal node fields
             const anchor: ASTAnchor = {
                 // Minimal node fields (ALWAYS present)
                 minimalNodeType: minimalNode.type,
@@ -102,11 +84,6 @@ export class ASTCodeLocator {
                 path: minimalNodePath.indices,
                 pathTypes: minimalNodePath.types,
                 pathNames: minimalNodePath.names,
-
-                // Meaningful ancestor fields (OPTIONAL)
-                meaningfulNodeType,
-                meaningfulNodeName,
-                signature,
 
                 // Metadata
                 originalStartLine: startLine,
@@ -118,10 +95,7 @@ export class ASTCodeLocator {
             console.log('[ASTCodeLocator.createAnchor] Created anchor:', {
                 minimalNodeType: anchor.minimalNodeType,
                 minimalNodeName: anchor.minimalNodeName,
-                pathLength: anchor.path.length,
-                meaningfulNodeType: anchor.meaningfulNodeType,
-                meaningfulNodeName: anchor.meaningfulNodeName,
-                hasSignature: !!anchor.signature
+                pathLength: anchor.path.length
             });
 
             return anchor;
@@ -156,19 +130,7 @@ export class ASTCodeLocator {
                     return astResult;
                 }
 
-                // Strategy 2: Try signature-based matching (only if meaningful ancestor exists)
-                if (astAnchor.meaningfulNodeType && astAnchor.signature) {
-                    const sigResult = await this.locateBySignature(
-                        filePath,
-                        currentContent,
-                        astAnchor
-                    );
-                    if (sigResult.found && sigResult.confidence > 0.7) {
-                        return sigResult;
-                    }
-                }
-
-                // Strategy 3: Try fuzzy AST matching (find similar nodes)
+                // Strategy 2: Try fuzzy AST matching (find similar nodes)
                 const fuzzyResult = await this.locateByFuzzyAST(
                     filePath,
                     currentContent,
@@ -265,60 +227,7 @@ export class ASTCodeLocator {
     }
 
     /**
-     * Strategy 2: Locate by function/method signature
-     * Only used if we have meaningful ancestor information
-     */
-    private async locateBySignature(
-        filePath: string,
-        content: string,
-        anchor: ASTAnchor
-    ): Promise<ASTLocateResult> {
-        try {
-            // Only proceed if we have meaningful ancestor info
-            if (!anchor.meaningfulNodeType || !anchor.meaningfulNodeName || !anchor.signature) {
-                return { found: false, method: 'ast-signature', confidence: 0 };
-            }
-
-            const tree = this.parser.parse(content, filePath);
-            if (!tree) {
-                return { found: false, method: 'ast-signature', confidence: 0 };
-            }
-
-            // Find function/method by name from meaningful ancestor
-            const node = this.parser.findFunctionByName(tree, anchor.meaningfulNodeName);
-            if (!node) {
-                return { found: false, method: 'ast-signature', confidence: 0 };
-            }
-
-            // Verify signature matches
-            const currentSignature = this.parser.getFunctionSignature(node);
-            const signatureMatch = currentSignature === anchor.signature;
-
-            const confidence = signatureMatch ? 0.9 : 0.5;
-
-            if (confidence > 0.7) {
-                // Convert from 0-based row to 1-based line number
-                const startLine = node.startPosition.row + 1;
-                const endLine = node.endPosition.row + 1;
-
-                return {
-                    found: true,
-                    currentLines: [startLine, endLine],
-                    currentCode: node.text,
-                    method: 'ast-signature',
-                    confidence
-                };
-            }
-
-            return { found: false, method: 'ast-signature', confidence };
-        } catch (error) {
-            console.error('Error in signature-based location:', error);
-            return { found: false, method: 'ast-signature', confidence: 0 };
-        }
-    }
-
-    /**
-     * Strategy 3: Fuzzy AST matching - find similar nodes
+     * Strategy 2: Fuzzy AST matching - find similar nodes
      */
     private async locateByFuzzyAST(
         filePath: string,
@@ -370,37 +279,27 @@ export class ASTCodeLocator {
     /**
      * Calculate confidence score for how well a node matches the anchor
      * 
-     * NEW LOGIC:
-     * - Always check minimalNodeType (required field)
+     * LOGIC:
+     * - Check minimalNodeType (required field)
      * - Check minimalNodeName if available
-     * - Check signature ONLY if meaningfulNodeType is present
      * - Check content hash if available
      */
     private calculateNodeMatchConfidence(node: any, anchor: ASTAnchor): number {
         let score = 0;
         let checks = 0;
 
-        // Check MINIMAL node type (always present, always check)
+        // Check MINIMAL node type (always present)
         if (node.type === anchor.minimalNodeType) {
-            score += 0.3;
+            score += 0.4;
         }
         checks++;
 
-        // Check MINIMAL node name (only if both have it)
+        // Check MINIMAL node name (if both have it)
         const nodeName = this.extractNodeName(node);
         if (nodeName && anchor.minimalNodeName && nodeName === anchor.minimalNodeName) {
-            score += 0.3;
+            score += 0.4;
         }
         checks++;
-
-        // Check signature - ONLY if we have meaningful ancestor info
-        if (anchor.meaningfulNodeType && anchor.signature) {
-            const currentSig = this.parser.getFunctionSignature(node);
-            if (currentSig === anchor.signature) {
-                score += 0.2;
-            }
-            checks++;
-        }
 
         // Check content hash if available
         if (anchor.contentHash) {
@@ -457,33 +356,6 @@ export class ASTCodeLocator {
         );
 
         return identifierChild?.text || (node.type === 'identifier' ? node.text : undefined);
-    }
-
-    /**
-     * Find the most meaningful parent node (function, class, etc.)
-     */
-    private findMeaningfulParent(node: any): any {
-        const meaningfulTypes = new Set([
-            'function_declaration',
-            'method_definition',
-            'arrow_function',
-            'function_expression',
-            'class_declaration',
-            'interface_declaration',
-            'type_alias_declaration',
-            'variable_declaration',
-            'lexical_declaration'
-        ]);
-
-        let current = node;
-        while (current) {
-            if (meaningfulTypes.has(current.type)) {
-                return current;
-            }
-            current = current.parent;
-        }
-
-        return node;
     }
 
     /**
