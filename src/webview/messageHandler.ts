@@ -238,80 +238,114 @@ export async function handleMessage(
 }
 
 /**
- * Handles the highlightCodeMapping command from the webview.
- * This function visualizes the mapping between summary components and code by highlighting code segments.
+ * Unified code mapping handler that processes code segments with AST-based resolution.
+ * Supports both highlight (decorations) and select (editor selection) modes.
  * 
- * MAPPING FLOW:
- * 1. ORIGINAL INTENDED MAPPING: Comes from LLM via codeSegments, each with:
- *    - code: the code snippet text
- *    - line: line number from LLM output (1-based)
- *    - astNodeRef?: optional AST reference for current code location
+ * SHARED LOGIC:
+ * 1. Editor and file path validation
+ * 2. Segment filtering
+ * 3. AST-based code location resolution
+ * 4. Per-line range creation with whitespace trimming
  * 
- * 2. USED REFERENCE INFO:
- *    - If astNodeRef.anchor exists: Uses AST resolution strategies
- *      * Strategy 1: AST path matching (confidence > 0.8)
- *      * Strategy 2: Fuzzy AST matching (confidence > 0.6)
- *    - Otherwise: Uses original line number directly
+ * MODE-SPECIFIC LOGIC:
+ * - 'highlight': Creates colored background decorations with lifecycle management
+ * - 'select': Creates a single editor selection spanning all resolved ranges
  * 
- * 3. FINAL ACTUAL MAPPING: After resolution, each highlight contains:
- *    - lineNum: resolved line number (may differ from original if AST moved code)
- *    - startChar, endChar: position within the line
- *    - Applied as visual decoration with color based on colorIndex
- * 
- * @param message The message containing selectedCode, codeSegments[], colorIndex, filename, fullPath
- *   - codeSegments: Array of {code, line, astNodeRef?}
- *   - colorIndex: Which color to use for highlighting
+ * @param message The message containing codeSegments, filename, fullPath, and mode-specific params
+ * @param mode The operation mode: 'highlight' or 'select'
  */
-async function handleHighlightCodeMapping(message: any) {
-    await handleClearHighlight();
+async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
+    // Mode-specific validation
+    if (mode === 'highlight') {
+        const { selectedCode, colorIndex } = message;
+        if (typeof selectedCode !== "string" || typeof colorIndex !== "number") {
+            return;
+        }
+    } else {
+        const { codeSegments } = message;
+        if (!Array.isArray(codeSegments) || codeSegments.length === 0) {
+            console.warn("[selectCodeMapping] No code segments provided.");
+            return;
+        }
+    }
 
+    // Clear existing highlights if in highlight mode
+    if (mode === 'highlight') {
+        await handleClearHighlight();
+    }
+
+    // Shared: Editor validation
     const editor = getLastActiveEditor();
     if (!editor) {
+        if (mode === 'select') {
+            console.warn("[selectCodeMapping] No active editor found.");
+        }
         return;
     }
 
     const { selectedCode, codeSegments, colorIndex, filename, fullPath } = message;
-    // codeSegments = [
-    //   { code: "let x = 5;", line: 42, astNodeRef?: {anchor, originalLine, originalText} },
-    //   { code: "return x;", line: 45, astNodeRef?: {...} },
-    //   ...
-    // ]
 
-    if (typeof selectedCode !== "string" || typeof colorIndex !== "number") {
-        return;
-    }
-
+    // Shared: File path validation
     const editorPath = editor.document.fileName;
     if (fullPath && editorPath !== fullPath) {
         return;
     }
 
+    // Shared: Document text retrieval
     const docText = editor.document.getText();
 
-    const regionMatch = findBestMatch(docText, selectedCode);
-    if (regionMatch.location === -1) {
-        return;
+    // Highlight mode: Validate region match
+    if (mode === 'highlight') {
+        const regionMatch = findBestMatch(docText, selectedCode);
+        if (regionMatch.location === -1) {
+            return;
+        }
     }
 
+    // Shared: Range collection
     const allRanges: vscode.Range[] = [];
 
+    // Shared: Segment filtering
     if (Array.isArray(codeSegments) && codeSegments.length > 0) {
         const filteredSegments = codeSegments.filter(
             seg => seg && typeof seg.line === "number" && seg.line > 0
         );
 
-        // ========== VISUAL MAPPING RESOLUTION LOOP ==========
-        // For each segment from the LLM mapping, resolve its current location in the code
+        if (filteredSegments.length === 0 && mode === 'select') {
+            console.warn("[selectCodeMapping] No valid code segments after filtering.");
+            return;
+        }
+
+        // Shared: Helper function for per-line trimming
+        const getLineTrimRange = (lineIndex: number, preferredStartChar?: number, preferredEndChar?: number) => {
+            const lineText = editor.document.lineAt(lineIndex).text;
+            const firstNonWhitespace = Math.max(0, lineText.search(/\S/));
+            const lineEnd = lineText.length;
+
+            // If line is empty or whitespace-only, skip it
+            if (lineText.trim().length === 0) {
+                return null;
+            }
+
+            const startChar = preferredStartChar !== undefined
+                ? Math.max(preferredStartChar, firstNonWhitespace)
+                : firstNonWhitespace;
+            const endChar = preferredEndChar !== undefined ? preferredEndChar : lineEnd;
+
+            return new vscode.Range(
+                new vscode.Position(lineIndex, startChar),
+                new vscode.Position(lineIndex, Math.max(startChar, endChar))
+            );
+        };
+
+        // Shared: AST resolution loop for each segment
         for (const seg of filteredSegments) {
-            // STEP 1: ORIGINAL INTENDED MAPPING
-            // This is what the LLM generated:
             console.log(`[VISUAL MAPPING ORIGINAL]`, { code: seg.code, line: seg.line });
 
             let codeText = seg.code;
-            let locateResult: any = null;  // Store locate result for later use
+            let locateResult: any = null;
 
-            // STEP 2: ATTEMPT AST-BASED RESOLUTION
-            // If the segment has an AST reference, try intelligent resolution strategies
+            // Shared: AST-based resolution
             if (seg.astNodeRef?.anchor && fullPath) {
                 console.log(`  [AST PATH]`, {
                     path: seg.astNodeRef.anchor.path,
@@ -327,7 +361,6 @@ async function handleHighlightCodeMapping(message: any) {
                         seg.astNodeRef.anchor
                     );
 
-                    // STEP 3: FINAL ACTUAL MAPPING (if AST resolution succeeds)
                     if (locateResult.found && locateResult.currentLines && locateResult.confidence > 0.5) {
                         const oldLine = seg.line;
 
@@ -345,7 +378,6 @@ async function handleHighlightCodeMapping(message: any) {
                             codeSnippet: codeText
                         });
                     } else {
-                        // AST resolution failed or low confidence, skip visualization
                         console.warn(`  [AST RESOLUTION FAILED]`, { method: locateResult.method, confidence: locateResult.confidence });
                         locateResult = null;
                     }
@@ -354,37 +386,13 @@ async function handleHighlightCodeMapping(message: any) {
                     locateResult = null;
                 }
             } else {
-                // No AST reference available, skip visualization
-                console.warn(`  [NO AST REFERENCE] Skipping highlight for line ${seg.line}`);
+                console.warn(`  [NO AST REFERENCE] Skipping ${mode} for line ${seg.line}`);
             }
 
-            // STEP 4: CREATE HIGHLIGHT RANGES (TRIM LEADING WHITESPACE PER LINE)
-            // NEW APPROACH: For multi-line ranges, split into per-line ranges and trim tabs/spaces on each line.
+            // Shared: Create ranges from AST resolution result
             const rangesToAdd: vscode.Range[] = [];
 
-            const getLineTrimRange = (lineIndex: number, preferredStartChar?: number, preferredEndChar?: number) => {
-                const lineText = editor.document.lineAt(lineIndex).text;
-                const firstNonWhitespace = Math.max(0, lineText.search(/\S/));
-                const lineEnd = lineText.length;
-
-                // If line is empty or whitespace-only, skip it
-                if (lineText.trim().length === 0) {
-                    return null;
-                }
-
-                const startChar = preferredStartChar !== undefined
-                    ? Math.max(preferredStartChar, firstNonWhitespace)
-                    : firstNonWhitespace;
-                const endChar = preferredEndChar !== undefined ? preferredEndChar : lineEnd;
-
-                return new vscode.Range(
-                    new vscode.Position(lineIndex, startChar),
-                    new vscode.Position(lineIndex, Math.max(startChar, endChar))
-                );
-            };
-
             if (locateResult && locateResult.found && locateResult.currentRange) {
-                // Highlight the complete AST node with precise column positions
                 const { startLine, startColumn, endLine, endColumn } = locateResult.currentRange;
 
                 // Validate line numbers are within bounds
@@ -430,46 +438,82 @@ async function handleHighlightCodeMapping(message: any) {
                     continue;
                 }
             } else {
-                // No AST result, do not create fallback highlight
+                // No AST result, skip this segment
                 continue;
             }
 
-            // STEP 5: ADD HIGHLIGHT TO COLLECTION
+            // Add ranges to collection
             allRanges.push(...rangesToAdd);
         }
     }
 
-    if (allRanges.length > 0) {
-        const color = SUMMARY_CODE_MAPPING_COLORS[colorIndex % SUMMARY_CODE_MAPPING_COLORS.length] + "80";
-        const decorationType = vscode.window.createTextEditorDecorationType({
-            backgroundColor: color,
-            isWholeLine: false,
-            borderRadius: "3px"
-        });
+    // MODE-SPECIFIC: Final application
+    if (mode === 'highlight') {
+        // Highlight mode: Apply decorations
+        if (allRanges.length > 0) {
+            const color = SUMMARY_CODE_MAPPING_COLORS[colorIndex % SUMMARY_CODE_MAPPING_COLORS.length] + "80";
+            const decorationType = vscode.window.createTextEditorDecorationType({
+                backgroundColor: color,
+                isWholeLine: false,
+                borderRadius: "3px"
+            });
 
-        editor.setDecorations(decorationType, allRanges);
-        // create a new highlight record with lifecycle disposables
-        const highlightId = uuidv4();
-        const disposables: vscode.Disposable[] = [];
-        disposables.push(vscode.workspace.onDidChangeTextDocument((e) => {
-            if (e.document.fileName === editor.document.fileName) {
-                void handleClearHighlight(highlightId);
-            }
-        }));
-        disposables.push(vscode.workspace.onDidCloseTextDocument((doc) => {
-            if (doc.fileName === editor.document.fileName) {
-                void handleClearHighlight(highlightId);
-            }
-        }));
-        disposables.push(vscode.window.onDidChangeActiveTextEditor((active) => {
-            if (!active || active.document.fileName !== editor.document.fileName) {
-                void handleClearHighlight(highlightId);
-            }
-        }));
-        currentHighlight = { id: highlightId, decoration: decorationType, editor, disposables };
+            editor.setDecorations(decorationType, allRanges);
+
+            // Create a new highlight record with lifecycle disposables
+            const highlightId = uuidv4();
+            const disposables: vscode.Disposable[] = [];
+            disposables.push(vscode.workspace.onDidChangeTextDocument((e) => {
+                if (e.document.fileName === editor.document.fileName) {
+                    void handleClearHighlight(highlightId);
+                }
+            }));
+            disposables.push(vscode.workspace.onDidCloseTextDocument((doc) => {
+                if (doc.fileName === editor.document.fileName) {
+                    void handleClearHighlight(highlightId);
+                }
+            }));
+            disposables.push(vscode.window.onDidChangeActiveTextEditor((active) => {
+                if (!active || active.document.fileName !== editor.document.fileName) {
+                    void handleClearHighlight(highlightId);
+                }
+            }));
+            currentHighlight = { id: highlightId, decoration: decorationType, editor, disposables };
+        } else {
+            console.warn("[highlightCodeMapping] No code regions found to highlight.");
+        }
     } else {
-        console.warn("[highlightCodeMapping] No code regions found to highlight.");
+        // Select mode: Create single selection from first to last range
+        if (allRanges.length > 0) {
+            // Find the earliest start position and latest end position
+            let minStart = allRanges[0].start;
+            let maxEnd = allRanges[0].end;
+
+            for (const range of allRanges) {
+                if (range.start.isBefore(minStart)) {
+                    minStart = range.start;
+                }
+                if (range.end.isAfter(maxEnd)) {
+                    maxEnd = range.end;
+                }
+            }
+
+            editor.selection = new vscode.Selection(minStart, maxEnd);
+            editor.revealRange(new vscode.Range(minStart, maxEnd), vscode.TextEditorRevealType.InCenter);
+        } else {
+            console.warn("[selectCodeMapping] No code regions found to select.");
+        }
     }
+}
+
+/**
+ * Handles the highlightCodeMapping command from the webview.
+ * Delegates to unified handleCodeMapping with 'highlight' mode.
+ * 
+ * @param message The message containing selectedCode, codeSegments[], colorIndex, filename, fullPath
+ */
+async function handleHighlightCodeMapping(message: any) {
+    await handleCodeMapping(message, 'highlight');
 }
 
 /**
@@ -501,72 +545,12 @@ async function handleClearHighlight(id?: string) {
 
 /**
  * Handles the selectCodeMapping command from the webview.
- * Applies a selection to the editor spanning from the first code segment to the last.
+ * Delegates to unified handleCodeMapping with 'select' mode.
+ * 
  * @param message The message containing codeSegments, filename, fullPath
  */
 async function handleSelectCodeMapping(message: any) {
-    const editor = getLastActiveEditor();
-    if (!editor) {
-        console.warn("[selectCodeMapping] No active editor found.");
-        return;
-    }
-
-    const { codeSegments, filename, fullPath } = message;
-
-    if (!Array.isArray(codeSegments) || codeSegments.length === 0) {
-        console.warn("[selectCodeMapping] No code segments provided.");
-        return;
-    }
-
-    const editorPath = editor.document.fileName;
-    if (fullPath && editorPath !== fullPath) {
-        return;
-    }
-
-    const filteredSegments = codeSegments.filter(
-        seg => seg && typeof seg.line === "number" && seg.line > 0
-    );
-
-    if (filteredSegments.length === 0) {
-        console.warn("[selectCodeMapping] No valid code segments after filtering.");
-        return;
-    }
-
-    const firstSegment = filteredSegments[0];
-    const lastSegment = filteredSegments[filteredSegments.length - 1];
-
-    const firstLineNum = firstSegment.line - 1;
-    const lastLineNum = lastSegment.line - 1;
-
-    if (firstLineNum < 0 || lastLineNum >= editor.document.lineCount) {
-        console.warn("[selectCodeMapping] Code segments out of document bounds.");
-        return;
-    }
-
-    const firstLineText = editor.document.lineAt(firstLineNum).text;
-    const lastLineText = editor.document.lineAt(lastLineNum).text;
-
-    let startChar = 0;
-    if (typeof firstSegment.code === "string" && firstSegment.code.trim().length > 0) {
-        const idx = firstLineText.indexOf(firstSegment.code);
-        if (idx !== -1) {
-            startChar = idx;
-        }
-    }
-
-    let endChar = lastLineText.length;
-    if (typeof lastSegment.code === "string" && lastSegment.code.trim().length > 0) {
-        const idx = lastLineText.indexOf(lastSegment.code);
-        if (idx !== -1) {
-            endChar = idx + lastSegment.code.length;
-        }
-    }
-
-    const selectionStart = new vscode.Position(firstLineNum, startChar);
-    const selectionEnd = new vscode.Position(lastLineNum, endChar);
-
-    editor.selection = new vscode.Selection(selectionStart, selectionEnd);
-    editor.revealRange(new vscode.Range(selectionStart, selectionEnd), vscode.TextEditorRevealType.InCenter);
+    await handleCodeMapping(message, 'select');
 }
 
 /**
