@@ -267,7 +267,6 @@ async function handleHighlightCodeMapping(message: any) {
 
     const editor = getLastActiveEditor();
     if (!editor) {
-        console.warn("[highlightCodeMapping] No active editor found.");
         return;
     }
 
@@ -279,7 +278,6 @@ async function handleHighlightCodeMapping(message: any) {
     // ]
 
     if (typeof selectedCode !== "string" || typeof colorIndex !== "number") {
-        console.warn("[highlightCodeMapping] Invalid selectedCode or colorIndex.");
         return;
     }
 
@@ -292,7 +290,6 @@ async function handleHighlightCodeMapping(message: any) {
 
     const regionMatch = findBestMatch(docText, selectedCode);
     if (regionMatch.location === -1) {
-        console.warn("[highlightCodeMapping] Could not find selectedCode region in file.");
         return;
     }
 
@@ -308,7 +305,7 @@ async function handleHighlightCodeMapping(message: any) {
         for (const seg of filteredSegments) {
             // STEP 1: ORIGINAL INTENDED MAPPING
             // This is what the LLM generated:
-            console.log(`[VISUAL MAPPING] Original mapping: code="${seg.code.substring(0, 30)}..." line=${seg.line}`);
+            console.log(`[VISUAL MAPPING ORIGINAL]`, { code: seg.code, line: seg.line });
 
             let codeText = seg.code;
             let locateResult: any = null;  // Store locate result for later use
@@ -316,13 +313,6 @@ async function handleHighlightCodeMapping(message: any) {
             // STEP 2: ATTEMPT AST-BASED RESOLUTION
             // If the segment has an AST reference, try intelligent resolution strategies
             if (seg.astNodeRef?.anchor && fullPath) {
-                console.log(`  [USED REFERENCE INFO] AST anchor available:`, {
-                    minimalNodeType: seg.astNodeRef.anchor.minimalNodeType,
-                    minimalNodeName: seg.astNodeRef.anchor.minimalNodeName,
-                    originalStartLine: seg.astNodeRef.anchor.originalStartLine,
-                    originalEndLine: seg.astNodeRef.anchor.originalEndLine,
-                    contentHash: seg.astNodeRef.anchor.contentHash?.substring(0, 8) + '...'
-                });
                 console.log(`  [AST PATH]`, {
                     path: seg.astNodeRef.anchor.path,
                     pathTypes: seg.astNodeRef.anchor.pathTypes,
@@ -341,29 +331,31 @@ async function handleHighlightCodeMapping(message: any) {
                     if (locateResult.found && locateResult.currentLines && locateResult.confidence > 0.5) {
                         const oldLine = seg.line;
 
-                        console.log(`  [FINAL ACTUAL MAPPING] AST resolution succeeded:`);
-                        console.log(`    - Method: ${locateResult.method}`);
-                        console.log(`    - Original line: ${oldLine} → Resolved line: ${locateResult.currentLines[0]}`);
-                        if (locateResult.currentRange) {
-                            const { startLine, startColumn, endLine, endColumn } = locateResult.currentRange;
-                            console.log(`    - Position: ${startLine}:${startColumn}-${endLine}:${endColumn}`);
-                        }
-                        console.log(`    - Confidence: ${locateResult.confidence}`);
-                        console.log(`    - Code: "${codeText.substring(0, 30)}..."`);
+                        console.log(`  [AST RESOLUTION SUCCESS]`, {
+                            method: locateResult.method,
+                            originalLine: oldLine,
+                            resolvedLine: locateResult.currentLines[0],
+                            position: locateResult.currentRange ? {
+                                startLine: locateResult.currentRange.startLine,
+                                startColumn: locateResult.currentRange.startColumn,
+                                endLine: locateResult.currentRange.endLine,
+                                endColumn: locateResult.currentRange.endColumn
+                            } : null,
+                            confidence: locateResult.confidence,
+                            codeSnippet: codeText
+                        });
                     } else {
                         // AST resolution failed or low confidence, skip visualization
-                        console.log(`  [AST RESOLUTION FAILED] Method: ${locateResult.method}, Confidence: ${locateResult.confidence}`);
-                        console.log(`    - Skipping highlight for this segment`);
+                        console.warn(`  [AST RESOLUTION FAILED]`, { method: locateResult.method, confidence: locateResult.confidence });
                         locateResult = null;
                     }
                 } catch (error) {
                     console.warn(`  [AST RESOLUTION ERROR] Failed to resolve with AST:`, error);
-                    console.log(`    - Skipping highlight for this segment`);
                     locateResult = null;
                 }
             } else {
                 // No AST reference available, skip visualization
-                console.log(`  [NO AST REFERENCE] Skipping highlight for line ${seg.line}`);
+                console.warn(`  [NO AST REFERENCE] Skipping highlight for line ${seg.line}`);
             }
 
             // STEP 4: CREATE HIGHLIGHT RANGES (TRIM LEADING WHITESPACE PER LINE)
@@ -398,7 +390,6 @@ async function handleHighlightCodeMapping(message: any) {
                 // Validate line numbers are within bounds
                 const maxLine = editor.document.lineCount;
                 if (startLine < 1 || startLine > maxLine || endLine < 1 || endLine > maxLine) {
-                    console.warn(`  [HIGHLIGHT SKIPPED] AST node range ${startLine}:${startColumn}-${endLine}:${endColumn} out of bounds (max: ${maxLine})`);
                     continue;
                 }
 
@@ -410,7 +401,6 @@ async function handleHighlightCodeMapping(message: any) {
                             new vscode.Position(endLine - 1, endColumn)
                         );
                         rangesToAdd.push(range);
-                        console.log(`  [HIGHLIGHT RANGE] Using AST node range: line ${startLine}, columns ${startColumn}-${endColumn}`);
                     } else {
                         // Multi-line: first line from startColumn to end, middle lines full, last line from start to endColumn
                         // First line
@@ -435,11 +425,8 @@ async function handleHighlightCodeMapping(message: any) {
                             new vscode.Position(endLine - 1, lastLineStart),
                             new vscode.Position(endLine - 1, endColumn)
                         ));
-
-                        console.log(`  [HIGHLIGHT RANGE] Using AST node range: lines ${startLine}:${startColumn}-${endLine}:${endColumn}`);
                     }
                 } catch (error) {
-                    console.error(`  [HIGHLIGHT ERROR] Failed to create range for ${startLine}:${startColumn}-${endLine}:${endColumn}:`, error);
                     continue;
                 }
             } else {
@@ -449,11 +436,6 @@ async function handleHighlightCodeMapping(message: any) {
 
             // STEP 5: ADD HIGHLIGHT TO COLLECTION
             allRanges.push(...rangesToAdd);
-            if (rangesToAdd.length > 0) {
-                const first = rangesToAdd[0];
-                const last = rangesToAdd[rangesToAdd.length - 1];
-                console.log(`  [HIGHLIGHT CREATED] Range: ${first.start.line + 1}:${first.start.character}-${last.end.line + 1}:${last.end.character}`);
-            }
         }
     }
 
@@ -715,7 +697,6 @@ async function handleGetSummary(
                 realStartLine = editor.selection.start.line + 1;
             }
         }
-        console.log(`[SUMMARY MAPPING] Anchor code section at line ${realStartLine}`);
 
         // STEP 2: EXTRACT STRUCTURAL CONTEXT FROM AST
         // This context helps the LLM understand code structure for better mappings
@@ -728,15 +709,6 @@ async function handleGetSummary(
             )
             : undefined;
 
-        if (structuralContext) {
-            console.log(`[SUMMARY MAPPING] Structural context:`, {
-                enclosingFunction: structuralContext.enclosingFunction,
-                enclosingClass: structuralContext.enclosingClass,
-                nodeType: structuralContext.nodeType,
-                nestingLevel: structuralContext.nestingLevel
-            });
-        }
-
         // STEP 3: LLM GENERATES ORIGINAL INTENDED MAPPINGS
         // For each summary detail level, call LLM to generate code-to-summary mappings
         // buildSummaryMapping:
@@ -746,18 +718,9 @@ async function handleGetSummary(
         const mappingPromises = mappingKeys.map(([detail, structured]) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
             const summaryText = (summary as any)[key] || "";
-            console.log(`[ORIGINAL MAPPING] Calling LLM for ${detail}_${structured}: "${summaryText.substring(0, 50)}..."`);
             return buildSummaryMapping(selectedText, summaryText, realStartLine, structuralContext);
         });
         const mappingResults = await Promise.all(mappingPromises);
-
-        console.log(`[ORIGINAL MAPPING] Received ${mappingResults.length} mapping results from LLM`);
-        mappingResults.forEach((result, idx) => {
-            console.log(`  - Mapping ${idx}: ${result.length} components`);
-            result.forEach(r => {
-                console.log(`    * "${r.summaryComponent}": ${r.codeSegments.length} code segments at lines [${r.codeSegments.map(s => s.line).join(', ')}]`);
-            });
-        });
 
         // STEP 4: AST POST-PROCESSING TO ADD NODE REFERENCES
         // Convert LLM line-based mappings into AST-aware references
@@ -766,17 +729,10 @@ async function handleGetSummary(
         //   OUTPUT: Same mappings enhanced with astNodeRef for each code segment
         //   - For each code segment, creates an AST anchor capturing structural info
         //   - This allows later resolution even if code moves slightly
-        console.log(`[AST POST-PROCESSING] Adding AST node references to all mappings...`);
         const enhancedMappingPromises = mappingResults.map(mapping =>
             astMappingProcessor.processMappings(mapping, fullPath, editor?.document.getText() || selectedText)
         );
         const enhancedMappings = await Promise.all(enhancedMappingPromises);
-
-        console.log(`[AST POST-PROCESSING] Completed: each segment now has astNodeRef with:`, {
-            anchor: "path, types, names, originalStartLine, originalEndLine, contentHash",
-            originalLine: "line number from LLM",
-            originalText: "code text from LLM"
-        });
 
         // STEP 5: ASSEMBLE FINAL SUMMARY MAPPINGS OBJECT
         // Group all enhanced mappings by detail level and structure type
@@ -784,7 +740,6 @@ async function handleGetSummary(
         mappingKeys.forEach(([detail, structured], idx) => {
             const key = `${detail}_${structured}` as keyof typeof summary;
             summaryMappings[key] = enhancedMappings[idx];
-            console.log(`[FINAL MAPPING] ${key}: ${enhancedMappings[idx].length} components with AST references`);
         });
 
         // STEP 6: CREATE AST ANCHOR FOR ENTIRE CODE SECTION
@@ -800,11 +755,6 @@ async function handleGetSummary(
                 endLine,
                 offset
             );
-            console.log(`[AST ANCHOR] Created for section at lines ${startLine}-${endLine}:`, {
-                minimalNodeType: astAnchor?.minimalNodeType,
-                minimalNodeName: astAnchor?.minimalNodeName,
-                pathLength: astAnchor?.path.length
-            });
         }
 
         // STEP 7: SEND COMPLETE RESULT TO WEBVIEW
@@ -821,7 +771,6 @@ async function handleGetSummary(
         // When user hovers over a summary component, webview sends highlightCodeMapping with:
         // - codeSegments from summaryMappings (includes line numbers and astNodeRef)
         // - This triggers AST resolution to find current locations before highlighting
-        console.log(`[SENDING RESULT] Sending to webview with summaryMappings keys:`, Object.keys(summaryMappings));
 
         // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({
@@ -965,7 +914,6 @@ async function applyFuzzyPatchAndReplaceInFile(
 
         return { success: true, patchedText: patchResult.patchedText };
     } catch (error) {
-        console.error('Error applying patch:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : "An unexpected error occurred while applying changes."
@@ -1082,7 +1030,6 @@ async function applyCodeChanges(
             newCode: patchedText
         });
     } catch (error) {
-        console.error('Error applying code changes:', error);
         webviewContainer.webview.postMessage({
             command: 'editResult',
             sectionId: message.sectionId,
@@ -1166,7 +1113,6 @@ async function handleCheckSectionValidity(
             currentLines: locateResult.currentLines
         });
     } catch (error) {
-        console.error('Error in section validity check:', error);
         webviewContainer.webview.postMessage({
             command: 'sectionValidityResult',
             status: 'code_not_matched',

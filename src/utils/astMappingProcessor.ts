@@ -36,7 +36,6 @@ export class ASTMappingProcessor {
         // Parse the file
         const tree = this.parser.parse(fullCode, filePath);
         if (!tree) {
-            console.warn('Failed to parse file for mapping processing:', filePath);
             return mappings;
         }
 
@@ -87,31 +86,19 @@ export class ASTMappingProcessor {
         filePath: string
     ): Promise<ASTNodeReference | undefined> {
         try {
-            console.log(`[AST TRANSFORM] Processing LLM fragment: "${code.substring(0, 50)}..." at line ${line}`);
-
             // STEP 1: Find the minimal AST node that contains the LLM's text fragment
             let minimalNode = this.parser.findMinimalContainingNode(tree, line, code);
 
             // Fallback: If minimal node not found, use position-based method
             if (!minimalNode) {
-                console.warn(`[AST TRANSFORM] Minimal node not found, falling back to position-based search`);
                 const lineText = fullCode.split('\n')[line - 1];
                 const firstNonWhitespace = lineText?.search(/\S/) ?? 0;
                 const column = firstNonWhitespace >= 0 ? firstNonWhitespace : 0;
                 minimalNode = this.parser.findNodeAtPosition(tree, line - 1, column);
                 if (!minimalNode) {
-                    console.error(`[AST TRANSFORM] Failed to find any node at line ${line}`);
                     return undefined;
                 }
             }
-
-            console.log(`[AST TRANSFORM] Found minimal node:`, {
-                type: minimalNode.type,
-                name: this.extractNodeName(minimalNode),
-                startLine: minimalNode.startPosition.row + 1,
-                endLine: minimalNode.endPosition.row + 1,
-                fullTextPreview: minimalNode.text.substring(0, 80) + '...'
-            });
 
             // STEP 2: Create anchor for this minimal node
             // The createAnchorFromNode will handle finding meaningful ancestors
@@ -126,11 +113,6 @@ export class ASTMappingProcessor {
                 return undefined;
             }
 
-            console.log(`[AST TRANSFORM] Created anchor:`, {
-                minimalNodeType: anchor.minimalNodeType,
-                pathLength: anchor.path.length
-            });
-
             // STEP 3: Return reference with FULL minimal node text
             return {
                 anchor,
@@ -139,7 +121,6 @@ export class ASTMappingProcessor {
                 llmFragment: code  // Keep LLM fragment for debugging
             };
         } catch (error) {
-            console.error('Error creating AST node reference:', error);
             return undefined;
         }
     }

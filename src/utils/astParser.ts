@@ -91,8 +91,6 @@ export class ASTParser {
     private async loadLanguage(language: Language, wasmFile: string, basePath: string): Promise<void> {
         try {
             const modulePath = path.join(basePath, wasmFile);
-            console.log(`Loading language ${language} from ${modulePath}`);
-
             const langObj = await Parser.Language.load(modulePath);
             this.languages.set(language, langObj);
             console.log(`✓ Successfully loaded language: ${language}`);
@@ -290,79 +288,7 @@ export class ASTParser {
         });
 
         const minimalNode = candidateNodes[0];
-
-        console.log(`[findMinimalContainingNode] Found minimal node for fragment "${textFragment.substring(0, 30)}..." at line ${line}:`, {
-            type: minimalNode.type,
-            name: this.extractNodeName(minimalNode),
-            startLine: minimalNode.startPosition.row + 1,
-            endLine: minimalNode.endPosition.row + 1,
-            textLength: (minimalNode.text || '').length,
-            textPreview: (minimalNode.text || '').substring(0, 80) + '...',
-            candidateCount: candidateNodes.length,
-            allTypes: candidateNodes.slice(0, 5).map(n => ({ type: n.type, len: n.text.length }))
-        });
-
         return minimalNode;
-    }
-
-    /**
-     * Find all nodes of a specific type
-     */
-    public findNodesByType(tree: any, type: string): any[] {
-        const results: any[] = [];
-
-        const traverse = (node: any) => {
-            if (node.type === type) {
-                results.push(node);
-            }
-            for (const child of node.children) {
-                traverse(child);
-            }
-        };
-
-        traverse(tree.rootNode);
-        return results;
-    }
-
-    /**
-     * Find function/method declaration by name
-     */
-    public findFunctionByName(tree: any, functionName: string): any | null {
-        const functionTypes = [
-            'function_declaration',
-            'method_definition',
-            'function_expression',
-            'arrow_function',
-            'function_definition'  // Python
-        ];
-
-        for (const funcType of functionTypes) {
-            const functions = this.findNodesByType(tree, funcType);
-            for (const func of functions) {
-                const name = this.extractNodeName(func);
-                if (name === functionName) {
-                    return func;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Find class declaration by name
-     */
-    public findClassByName(tree: any, className: string): any | null {
-        const classes = this.findNodesByType(tree, 'class_declaration');
-
-        for (const cls of classes) {
-            const name = this.extractNodeName(cls);
-            if (name === className) {
-                return cls;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -398,36 +324,6 @@ export class ASTParser {
         }
 
         return { indices, types, names };
-    }
-
-    /**
-     * Find node by path (strict matching - all indices and types must match)
-     */
-    public findNodeByPath(tree: any, nodePath: NodePath): any | null {
-        let current: any = tree.rootNode;
-
-        for (let i = 0; i < nodePath.indices.length; i++) {
-            const index = nodePath.indices[i];
-            const expectedType = nodePath.types[i];
-
-            if (index < 0 || index >= current.children.length) {
-                return null;
-            }
-
-            const child = current.children[index];
-
-            if (!child) {
-                return null;
-            }
-
-            if (child.type !== expectedType) {
-                return null;
-            }
-
-            current = child;
-        }
-
-        return current;
     }
 
     /**
@@ -506,7 +402,7 @@ export class ASTParser {
 
             if (!bestMatch) {
                 // No matching type found at this level, path is broken
-                console.log(`[findNodeByPathFlexible] Failed at level ${i}: no node with type "${expectedType}" found`);
+                console.warn(`  [findNodeByPathFlexible] Failed at level ${i}: no node with type "${expectedType}" found`);
                 return null;
             }
 
@@ -517,17 +413,14 @@ export class ASTParser {
             } else if (matchMethod === 'type+name') {
                 // Good match (type + name), slight penalty for wrong position
                 totalConfidence *= 0.95;
-                console.log(`[findNodeByPathFlexible] Level ${i}: matched by type+name (expected pos ${expectedIndex}, found at ${current.children.indexOf(bestMatch)})`);
             } else if (matchMethod === 'type+pos') {
                 // OK match (type + position), penalty for wrong name
                 totalConfidence *= 0.85;
-                console.log(`[findNodeByPathFlexible] Level ${i}: matched by type+pos (name mismatch)`);
             } else {
                 // Weak match (type only)
                 totalConfidence *= 0.75;
-                console.log(`[findNodeByPathFlexible] Level ${i}: matched by type only`);
             }
-
+            console.log(`  [findNodeByPathFlexible] Level ${i}: matched type "${bestMatch.type}" using [${matchMethod}] with cumulative confidence ${totalConfidence.toFixed(3)}`);
             current = bestMatch;
         }
 

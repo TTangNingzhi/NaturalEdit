@@ -35,7 +35,6 @@ export class ASTCodeLocator {
 
             const tree = this.parser.parse(fullContent, filePath);
             if (!tree) {
-                console.warn('Failed to parse file for AST anchor creation:', filePath);
                 return null;
             }
 
@@ -47,24 +46,15 @@ export class ASTCodeLocator {
 
             // Fallback: If minimal node not found, try finding node at first non-whitespace character
             if (!minimalNode) {
-                console.warn(`[createAnchor] findMinimalContainingNode failed, trying position-based search`);
                 const lineText = document.lineAt(startLine - 1).text;
                 const firstNonWhitespace = lineText.search(/\S/);
                 const column = firstNonWhitespace >= 0 ? firstNonWhitespace : 0;
                 minimalNode = this.parser.findNodeAtPosition(tree, startLine - 1, column);
 
                 if (!minimalNode) {
-                    console.warn('Could not find AST node at position:', startLine);
                     return null;
                 }
             }
-
-            console.log('[createAnchor] Found minimal node:', {
-                type: minimalNode.type,
-                startLine: minimalNode.startPosition.row + 1,
-                endLine: minimalNode.endPosition.row + 1,
-                textPreview: minimalNode.text.substring(0, 60) + '...'
-            });
 
             // STEP 2: Get COMPLETE path from root to minimal node
             // This path is not filtered by any semantic criteria
@@ -91,15 +81,8 @@ export class ASTCodeLocator {
                 contentHash
             };
 
-            console.log('[ASTCodeLocator.createAnchor] Created anchor:', {
-                minimalNodeType: anchor.minimalNodeType,
-                minimalNodeName: anchor.minimalNodeName,
-                pathLength: anchor.path.length
-            });
-
             return anchor;
         } catch (error) {
-            console.error('Error creating AST anchor:', error);
             return null;
         }
     }
@@ -131,7 +114,6 @@ export class ASTCodeLocator {
             }
 
             // AST path matching failed - return failure
-            console.warn('[ASTCodeLocator] AST path matching failed for code location');
             return {
                 found: false,
                 method: 'not-found',
@@ -140,7 +122,6 @@ export class ASTCodeLocator {
             };
 
         } catch (error) {
-            console.error('Error locating code:', error);
             return {
                 found: false,
                 method: 'not-found',
@@ -164,12 +145,6 @@ export class ASTCodeLocator {
                 return { found: false, method: 'ast-path', confidence: 0 };
             }
 
-            console.log(`[locateByASTPath] Attempting to find node by path:`, {
-                path: anchor.path,
-                pathTypes: anchor.pathTypes,
-                pathNames: anchor.pathNames
-            });
-
             // Try flexible path matching (prioritizes type > name > position)
             const flexResult = this.parser.findNodeByPathFlexible(tree, {
                 indices: anchor.path,
@@ -183,23 +158,13 @@ export class ASTCodeLocator {
             if (flexResult && flexResult.node) {
                 node = flexResult.node;
                 pathConfidence = flexResult.confidence;
-                console.log(`[locateByASTPath] Flexible match found with path confidence: ${pathConfidence.toFixed(3)}`);
             } else {
-                console.log(`[locateByASTPath] Failed: Could not find node by flexible path matching`);
                 return { found: false, method: 'ast-path', confidence: 0 };
             }
-
-            console.log(`[locateByASTPath] Found node:`, {
-                type: node.type,
-                startLine: node.startPosition.row + 1,
-                endLine: node.endPosition.row + 1
-            });
 
             // Verify node characteristics match and combine with path confidence
             const nodeConfidence = this.calculateNodeMatchConfidence(node, anchor);
             const finalConfidence = pathConfidence * nodeConfidence;
-
-            console.log(`[locateByASTPath] Node match confidence: ${nodeConfidence.toFixed(3)}, Final confidence: ${finalConfidence.toFixed(3)}`);
 
             if (finalConfidence > 0) {
                 // Convert from 0-based row to 1-based line number
@@ -223,7 +188,6 @@ export class ASTCodeLocator {
 
             return { found: false, method: 'ast-path', confidence: finalConfidence };
         } catch (error) {
-            console.error('Error in AST path location:', error);
             return { found: false, method: 'ast-path', confidence: 0 };
         }
     }
