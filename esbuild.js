@@ -26,7 +26,7 @@ const copyWasmFiles = {
 				const dest = path.join(__dirname, destDir, wasmFile);
 				fs.copyFileSync(src, dest);
 			}
-			console.log("✅ Copied Tree-sitter WASM files");
+			console.log("✓ Copied Tree-sitter WASM files");
 		});
 	}
 };

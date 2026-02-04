@@ -420,7 +420,6 @@ export class ASTParser {
                 // Weak match (type only)
                 totalConfidence *= 0.75;
             }
-            console.log(`  [findNodeByPathFlexible] Level ${i}: matched type "${bestMatch.type}" using [${matchMethod}] with cumulative confidence ${totalConfidence.toFixed(3)}`);
             current = bestMatch;
         }
 

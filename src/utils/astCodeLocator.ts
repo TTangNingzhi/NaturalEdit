@@ -242,7 +242,7 @@ export class ASTCodeLocator {
      * Hash content for quick comparison
      */
     private hashContent(content: string): string {
-        return crypto.createHash('md5').update(content).digest('hex');
+        return crypto.createHash('md5').update(content.trim()).digest('hex');
     }
 
     /**
