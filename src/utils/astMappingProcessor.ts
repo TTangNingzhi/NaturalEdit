@@ -70,6 +70,67 @@ export class ASTMappingProcessor {
     }
 
     /**
+     * Build AST-based code segments for the entire session selection.
+     * This captures the structural nodes covering the selected range, line by line.
+     */
+    public async buildSessionSegments(
+        filePath: string,
+        fullCode: string,
+        startLine: number,
+        endLine: number
+    ): Promise<Array<{ code: string; line: number; astNodeRef?: ASTNodeReference }>> {
+        const tree = this.parser.parse(fullCode, filePath);
+        if (!tree) {
+            return [];
+        }
+
+        const lines = fullCode.split('\n');
+        const segments: Array<{ code: string; line: number; astNodeRef?: ASTNodeReference }> = [];
+        const seenNodes = new Set<string>();
+
+        for (let line = startLine; line <= endLine; line++) {
+            const lineText = lines[line - 1] ?? '';
+            if (lineText.trim().length === 0) {
+                continue;
+            }
+
+            let minimalNode = this.parser.findMinimalContainingNode(tree, line, lineText.trim());
+            if (!minimalNode) {
+                const firstNonWhitespace = lineText.search(/\S/);
+                const column = firstNonWhitespace >= 0 ? firstNonWhitespace : 0;
+                minimalNode = this.parser.findNodeAtPosition(tree, line - 1, column);
+                if (!minimalNode) {
+                    continue;
+                }
+            }
+
+            const nodeId = `${minimalNode.type}-${minimalNode.startPosition.row}-${minimalNode.startPosition.column}-${minimalNode.endPosition.row}-${minimalNode.endPosition.column}`;
+            if (seenNodes.has(nodeId)) {
+                continue;
+            }
+            seenNodes.add(nodeId);
+
+            const anchor = await this.createAnchorFromNode(minimalNode, line, fullCode, filePath);
+            if (!anchor) {
+                continue;
+            }
+
+            segments.push({
+                code: lineText,
+                line,
+                astNodeRef: {
+                    anchor,
+                    originalLine: line,
+                    originalText: minimalNode.text,
+                    llmFragment: lineText
+                }
+            });
+        }
+
+        return segments;
+    }
+
+    /**
      * Create an AST node reference for a code segment.
      * 
      * NEW LOGIC:

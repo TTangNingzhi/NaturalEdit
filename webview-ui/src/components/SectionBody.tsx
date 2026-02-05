@@ -42,6 +42,21 @@ const SectionBody: React.FC<SectionBodyProps> = ({
         () => summaryMappings?.[mappingKey] || [],
         [summaryMappings, mappingKey]
     );
+    const allMappings = useMemo(
+        () => Object.values(summaryMappings || {}).flat(),
+        [summaryMappings]
+    );
+    const allCodeSegments = useMemo(
+        () => allMappings.flatMap(mapping =>
+            mapping.codeSegments.map(segment => ({
+                code: segment.code,
+                line: segment.line,
+                astNodeRef: segment.astNodeRef
+            }))
+        ),
+        [allMappings]
+    );
+    const sessionCodeSegments = section.metadata.sessionCodeSegments;
 
     /**
      * Handles hover events on summary mapping components.
@@ -134,15 +149,11 @@ const SectionBody: React.FC<SectionBodyProps> = ({
 
     // Effect: On mount, check section validity with backend
     useEffect(() => {
-        // Build code segments array from all mappings of current detail level
-        // This allows handling of parallel AST nodes separately
-        const codeSegments = rawMappings.flatMap(mapping =>
-            mapping.codeSegments.map(segment => ({
-                code: segment.code,
-                line: segment.line,
-                astNodeRef: segment.astNodeRef
-            }))
-        );
+        // Build code segments array for the entire session selection
+        // Prefer session-level AST segments if available, otherwise fallback to all mappings
+        const codeSegments = sessionCodeSegments && sessionCodeSegments.length > 0
+            ? sessionCodeSegments
+            : allCodeSegments;
 
         // Send message to backend to check file and code validity
         // Pass segments array with AST node references so backend can resolve each independently
@@ -171,7 +182,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
         return () => {
             window.removeEventListener("message", handleMessage);
         };
-    }, [section.metadata.fullPath, section.metadata.filename, rawMappings]);
+    }, [section.metadata.fullPath, section.metadata.filename, allCodeSegments, sessionCodeSegments]);
 
     // Overlay message based on validity status
     let overlayMessage = "";

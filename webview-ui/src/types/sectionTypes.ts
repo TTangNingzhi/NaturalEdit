@@ -40,17 +40,22 @@ export type SummaryData = {
 };
 
 /**
+ * Represents a single code segment with optional AST reference.
+ */
+export interface CodeSegment {
+    code: string;
+    line: number;
+    astNodeRef?: ASTNodeReference; // AST anchor for robust alignment
+}
+
+/**
  * Represents a mapping between a summary component and one or more code segments.
  * - summaryComponent: The phrase or component from the summary.
  * - codeSegments: An array of code fragments with their line numbers for precise mapping.
  */
 export interface SummaryCodeMapping {
     summaryComponent: string;
-    codeSegments: {
-        code: string;
-        line: number;
-        astNodeRef?: ASTNodeReference; // AST anchor for robust alignment
-    }[];
+    codeSegments: CodeSegment[];
 }
 
 export type DetailLevel = "low" | "medium" | "high";
@@ -67,6 +72,7 @@ export interface SectionMetadata {
     offset: number;
     originalCode: string;
     astAnchor?: ASTAnchor; // AST-based anchor for robust code location
+    sessionCodeSegments?: CodeSegment[]; // AST-based segments covering the full session
 }
 
 /**
@@ -118,6 +124,7 @@ export interface SummaryResultMessage {
     originalCode?: string;
     offset?: number;
     astAnchor?: ASTAnchor; // AST anchor for robust code location
+    sessionCodeSegments?: CodeSegment[]; // AST-based segments covering the full session
     summaryMappings?: {
         low_unstructured: SummaryCodeMapping[];
         low_structured: SummaryCodeMapping[];

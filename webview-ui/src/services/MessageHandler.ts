@@ -67,7 +67,8 @@ export const setupMessageHandler = (
                             fullPath: msg.fullPath || "",
                             offset: typeof msg.offset === "number" ? msg.offset : 0,
                             originalCode: msg.originalCode || "",
-                            astAnchor: msg.astAnchor
+                            astAnchor: msg.astAnchor,
+                            sessionCodeSegments: msg.sessionCodeSegments
                         },
                         lines: (() => {
                             const linesStr = typeof msg.lines === "string" ? msg.lines : "0-0";

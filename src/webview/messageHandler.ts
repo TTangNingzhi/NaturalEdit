@@ -670,6 +670,7 @@ async function handleGetSummary(
         // STEP 6: CREATE AST ANCHOR FOR ENTIRE CODE SECTION
         // Store structural information about the selected code for future reference
         let astAnchor;
+        let sessionCodeSegments: Array<{ code: string; line: number; astNodeRef?: any }> = [];
         if (editor && fullPath) {
             const startLine = realStartLine;
             const endLine = startLine + selectedText.split('\n').length - 1;
@@ -679,6 +680,13 @@ async function handleGetSummary(
                 startLine,
                 endLine,
                 offset
+            );
+
+            sessionCodeSegments = await astMappingProcessor.buildSessionSegments(
+                fullPath,
+                editor.document.getText(),
+                startLine,
+                endLine
             );
         }
 
@@ -710,6 +718,7 @@ async function handleGetSummary(
             offset,
             summaryMappings,
             astAnchor,
+            sessionCodeSegments,
             ...(oldSummaryData ? { oldSummaryData } : {})
         });
     } catch (err: any) {
