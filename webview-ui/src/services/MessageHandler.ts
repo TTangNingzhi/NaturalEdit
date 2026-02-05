@@ -174,18 +174,25 @@ export const setupMessageHandler = (
  * Request summary from VSCode, optionally with newCode and oldSummaryData for diffed rendering.
  * @param newCode The new code to summarize (optional)
  * @param oldSummaryData Optional previous summary data to pass for diff rendering
+ * @param customInstruction Optional custom instruction to apply to the summary (optional)
  */
-export const requestSummary = (newCode?: string, oldSummaryData?: SummaryData) => {
-    if (newCode && oldSummaryData) {
-        vscodeApi.postMessage({ command: "getSummary", newCode, oldSummaryData });
-    } else if (newCode) {
-        // If only newCode is provided (without oldSummaryData), send it as-is
-        vscodeApi.postMessage({ command: "getSummary", newCode });
-    } else if (oldSummaryData) {
-        vscodeApi.postMessage({ command: "getSummary", oldSummaryData });
-    } else {
-        vscodeApi.postMessage({ command: "getSummary" });
+export const requestSummary = (newCode?: string, oldSummaryData?: SummaryData, customInstruction?: string) => {
+    const message: {
+        command: string;
+        newCode?: string;
+        oldSummaryData?: SummaryData;
+        customInstruction?: string;
+    } = { command: "getSummary" };
+    if (newCode) {
+        message.newCode = newCode;
     }
+    if (oldSummaryData) {
+        message.oldSummaryData = oldSummaryData;
+    }
+    if (customInstruction && customInstruction.trim()) {
+        message.customInstruction = customInstruction.trim();
+    }
+    vscodeApi.postMessage(message);
 };
 
 /**
