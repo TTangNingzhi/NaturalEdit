@@ -161,10 +161,10 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     display: "flex",
                     alignItems: "center",
                     gap: SPACING.SMALL,
-                    marginBottom: SPACING.SMALL,
+                    marginTop: SPACING.SMALL,
                     padding: `${SPACING.TINY} ${SPACING.SMALL}`,
-                    backgroundColor: "rgba(255, 165, 0, 0.15)",
-                    borderLeft: "3px solid orange",
+                    backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+                    borderLeft: `3px solid var(--vscode-inputValidation-warningBorder)`,
                     borderRadius: "3px",
                     justifyContent: "space-between"
                 }}>
@@ -174,14 +174,15 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                         gap: SPACING.SMALL
                     }}>
                         <span className="codicon codicon-warning" style={{
-                            color: "orange",
+                            color: "var(--vscode-inputValidation-warningBorder)",
                             fontSize: FONT_SIZE.BODY
                         }} />
                         <span style={{
-                            color: "orange",
-                            fontSize: FONT_SIZE.SMALL
+                            color: "var(--vscode-inputValidation-warningBorder)",
+                            fontSize: FONT_SIZE.SMALL,
+                            fontWeight: 500
                         }}>
-                            Code changed - Summary may be outdated
+                            Code Changed
                         </span>
                     </div>
                     <button
@@ -197,41 +198,41 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                         }}
                         style={{
                             padding: "0.25em 0.75em",
-                            backgroundColor: "orange",
-                            color: "#fff",
+                            backgroundColor: "var(--vscode-inputValidation-warningBorder)",
+                            color: "var(--vscode-editor-background)",
                             border: "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             fontSize: FONT_SIZE.SMALL,
-                            fontWeight: "500",
                             whiteSpace: "nowrap",
-                            transition: "background-color 0.2s"
+                            transition: "opacity 0.2s"
                         }}
                         onMouseOver={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "darkorange";
+                            (e.currentTarget as HTMLButtonElement).style.opacity = "0.85";
                         }}
                         onMouseOut={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "orange";
+                            (e.currentTarget as HTMLButtonElement).style.opacity = "1";
                         }}
                     >
-                        Regenerate
+                        Regenerate Summary
                     </button>
                 </div>
-            )}
+            )
+            }
             {/* Row 3: Concise summary when collapsed */}
             {collapsed && concise && (
                 <div style={{
                     color: COLORS.DESCRIPTION,
                     fontStyle: "italic",
                     fontSize: FONT_SIZE.SMALL,
-                    marginTop: 0
+                    marginTop: SPACING.TINY
                 }}>
                     {oldSummaryData
                         ? renderDiffedText(oldSummaryData.low_unstructured, concise)
                         : concise}
                 </div>
             )}
-        </div>
+        </div >
     );
 };
 
