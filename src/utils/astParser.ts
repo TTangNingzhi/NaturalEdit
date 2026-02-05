@@ -9,7 +9,7 @@ export enum Language {
     JavaScript = 'javascript',
     Python = 'python',
     TSX = 'tsx',
-    JSX = 'jsx',
+    JSX = 'javascript',
 }
 
 /**
@@ -111,11 +111,12 @@ export class ASTParser {
             case '.tsx':
                 return Language.TSX;
             case '.js':
+                return Language.JavaScript;
             case '.mjs':
             case '.cjs':
                 return Language.JavaScript;
             case '.jsx':
-                return Language.JSX;
+                return Language.JavaScript;
             case '.py':
                 return Language.Python;
             default:

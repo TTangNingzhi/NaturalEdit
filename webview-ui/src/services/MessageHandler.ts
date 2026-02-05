@@ -4,7 +4,8 @@ import {
     SummaryData,
     SummaryResultMessage,
     SummaryProgressMessage,
-    EditResultMessage
+    EditResultMessage,
+    ASTAnchor
 } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
 import { logInteraction } from "../utils/telemetry.js";
@@ -157,6 +158,7 @@ export const requestSummary = (newCode?: string, oldSummaryData?: SummaryData) =
  * @param filename The file name
  * @param fullPath The full file path
  * @param offset The offset in the file
+ * @param astAnchor Optional AST anchor for robust code location
  */
 export const sendDirectPrompt = (
     sectionId: string,
@@ -164,7 +166,8 @@ export const sendDirectPrompt = (
     originalCode: string,
     filename: string,
     fullPath: string,
-    offset: number
+    offset: number,
+    astAnchor?: ASTAnchor
 ) => {
     vscodeApi.postMessage({
         command: "directPrompt",
@@ -173,7 +176,8 @@ export const sendDirectPrompt = (
         originalCode,
         filename,
         fullPath,
-        offset
+        offset,
+        astAnchor
     });
 };
 
@@ -187,6 +191,7 @@ export const sendDirectPrompt = (
  * @param fullPath The full file path
  * @param offset The offset in the file
  * @param originalSummary The original summary for diff comparison
+ * @param astAnchor Optional AST anchor for robust code location
  */
 export const sendEditSummary = (
     sectionId: string,
@@ -197,7 +202,8 @@ export const sendEditSummary = (
     filename: string,
     fullPath: string,
     offset: number,
-    originalSummary: string
+    originalSummary: string,
+    astAnchor?: ASTAnchor
 ) => {
     vscodeApi.postMessage({
         command: "summaryPrompt",
@@ -209,7 +215,8 @@ export const sendEditSummary = (
         filename,
         fullPath,
         offset,
-        originalSummary
+        originalSummary,
+        astAnchor
     });
 };
 
@@ -223,6 +230,7 @@ export const sendEditSummary = (
  * @param filename The file name
  * @param fullPath The full file path
  * @param offset The offset in the file
+ * @param astAnchor Optional AST anchor for robust code location
  */
 export const sendPromptToSummary = (
     sectionId: string,
@@ -233,7 +241,8 @@ export const sendPromptToSummary = (
     originalCode: string,
     filename: string,
     fullPath: string,
-    offset: number
+    offset: number,
+    astAnchor?: ASTAnchor
 ) => {
     vscodeApi.postMessage({
         command: "promptToSummary",
@@ -245,7 +254,8 @@ export const sendPromptToSummary = (
         originalCode,
         filename,
         fullPath,
-        offset
+        offset,
+        astAnchor
     });
 };
 

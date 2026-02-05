@@ -10,6 +10,7 @@ import { logInteractionFromFrontend } from '../utils/telemetry';
 import { ASTCodeLocator } from '../utils/astCodeLocator';
 import { ASTMappingProcessor } from '../utils/astMappingProcessor';
 import { ASTAnchor } from '../types/astTypes';
+import { resolveCodeWithAST, buildRangesFromASTResult, isConfidentMatch } from '../utils/astRangeBuilder';
 
 // Color palette for summary-code mapping highlights (must match frontend)
 const SUMMARY_CODE_MAPPING_COLORS = [
@@ -244,8 +245,8 @@ export async function handleMessage(
  * SHARED LOGIC:
  * 1. Editor and file path validation
  * 2. Segment filtering
- * 3. AST-based code location resolution
- * 4. Per-line range creation with whitespace trimming
+ * 3. AST-based code location resolution (via resolveCodeWithAST)
+ * 4. Range creation from AST results (via buildRangesFromASTResult)
  * 
  * MODE-SPECIFIC LOGIC:
  * - 'highlight': Creates colored background decorations with lifecycle management
@@ -316,36 +317,11 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
             return;
         }
 
-        // Shared: Helper function for per-line trimming
-        const getLineTrimRange = (lineIndex: number, preferredStartChar?: number, preferredEndChar?: number) => {
-            const lineText = editor.document.lineAt(lineIndex).text;
-            const firstNonWhitespace = Math.max(0, lineText.search(/\S/));
-            const lineEnd = lineText.length;
-
-            // If line is empty or whitespace-only, skip it
-            if (lineText.trim().length === 0) {
-                return null;
-            }
-
-            const startChar = preferredStartChar !== undefined
-                ? Math.max(preferredStartChar, firstNonWhitespace)
-                : firstNonWhitespace;
-            const endChar = preferredEndChar !== undefined ? preferredEndChar : lineEnd;
-
-            return new vscode.Range(
-                new vscode.Position(lineIndex, startChar),
-                new vscode.Position(lineIndex, Math.max(startChar, endChar))
-            );
-        };
-
         // Shared: AST resolution loop for each segment
         for (const seg of filteredSegments) {
-            console.log(`[VISUAL MAPPING ORIGINAL]`, { code: seg.code, line: seg.line });
+            console.log(`[VISUAL MAPPING] Processing segment`, { code: seg.code, line: seg.line });
 
-            let codeText = seg.code;
-            let locateResult: any = null;
-
-            // Shared: AST-based resolution
+            // Use AST-based resolution if anchor available
             if (seg.astNodeRef?.anchor && fullPath) {
                 console.log(`  [AST PATH]`, {
                     path: seg.astNodeRef.anchor.path,
@@ -353,97 +329,34 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
                     pathNames: seg.astNodeRef.anchor.pathNames
                 });
 
-                try {
-                    locateResult = await astLocator.locateCode(
-                        fullPath,
-                        seg.astNodeRef.originalText,
-                        seg.astNodeRef.anchor.originalOffset,
-                        seg.astNodeRef.anchor
-                    );
+                const locateResult = await resolveCodeWithAST(
+                    fullPath,
+                    seg.astNodeRef.originalText,
+                    seg.astNodeRef.anchor.originalOffset,
+                    seg.astNodeRef.anchor,
+                    astLocator
+                );
 
-                    if (locateResult.found && locateResult.currentLines && locateResult.confidence > 0.5) {
-                        const oldLine = seg.line;
+                if (isConfidentMatch(locateResult, 0.5) && locateResult.currentRange) {
+                    console.log(`  [AST RESOLUTION SUCCESS]`, {
+                        method: locateResult.method,
+                        originalLine: seg.line,
+                        resolvedLine: locateResult.currentLines?.[0],
+                        confidence: locateResult.confidence
+                    });
 
-                        console.log(`  [AST RESOLUTION SUCCESS]`, {
-                            method: locateResult.method,
-                            originalLine: oldLine,
-                            resolvedLine: locateResult.currentLines[0],
-                            position: locateResult.currentRange ? {
-                                startLine: locateResult.currentRange.startLine,
-                                startColumn: locateResult.currentRange.startColumn,
-                                endLine: locateResult.currentRange.endLine,
-                                endColumn: locateResult.currentRange.endColumn
-                            } : null,
-                            confidence: locateResult.confidence,
-                            codeSnippet: codeText
-                        });
-                    } else {
-                        console.warn(`  [AST RESOLUTION FAILED]`, { method: locateResult.method, confidence: locateResult.confidence });
-                        locateResult = null;
-                    }
-                } catch (error) {
-                    console.warn(`  [AST RESOLUTION ERROR] Failed to resolve with AST:`, error);
-                    locateResult = null;
+                    // Build ranges using utility function
+                    const rangesToAdd = buildRangesFromASTResult(editor.document, locateResult.currentRange);
+                    allRanges.push(...rangesToAdd);
+                } else {
+                    console.warn(`  [AST RESOLUTION FAILED]`, {
+                        confidence: locateResult.confidence,
+                        error: locateResult.error
+                    });
                 }
             } else {
                 console.warn(`  [NO AST REFERENCE] Skipping ${mode} for line ${seg.line}`);
             }
-
-            // Shared: Create ranges from AST resolution result
-            const rangesToAdd: vscode.Range[] = [];
-
-            if (locateResult && locateResult.found && locateResult.currentRange) {
-                const { startLine, startColumn, endLine, endColumn } = locateResult.currentRange;
-
-                // Validate line numbers are within bounds
-                const maxLine = editor.document.lineCount;
-                if (startLine < 1 || startLine > maxLine || endLine < 1 || endLine > maxLine) {
-                    continue;
-                }
-
-                try {
-                    if (startLine === endLine) {
-                        // Single line: use exact column positions
-                        const range = new vscode.Range(
-                            new vscode.Position(startLine - 1, startColumn),
-                            new vscode.Position(endLine - 1, endColumn)
-                        );
-                        rangesToAdd.push(range);
-                    } else {
-                        // Multi-line: first line from startColumn to end, middle lines full, last line from start to endColumn
-                        // First line
-                        const firstLineText = editor.document.lineAt(startLine - 1).text;
-                        rangesToAdd.push(new vscode.Range(
-                            new vscode.Position(startLine - 1, startColumn),
-                            new vscode.Position(startLine - 1, firstLineText.length)
-                        ));
-
-                        // Middle lines (trim leading whitespace)
-                        for (let line = startLine; line < endLine - 1; line++) {
-                            const range = getLineTrimRange(line);
-                            if (range) {
-                                rangesToAdd.push(range);
-                            }
-                        }
-
-                        // Last line
-                        const lastLineText = editor.document.lineAt(endLine - 1).text;
-                        const lastLineStart = Math.max(0, lastLineText.search(/\S/));
-                        rangesToAdd.push(new vscode.Range(
-                            new vscode.Position(endLine - 1, lastLineStart),
-                            new vscode.Position(endLine - 1, endColumn)
-                        ));
-                    }
-                } catch (error) {
-                    continue;
-                }
-            } else {
-                // No AST result, skip this segment
-                continue;
-            }
-
-            // Add ranges to collection
-            allRanges.push(...rangesToAdd);
         }
     }
 
@@ -860,47 +773,137 @@ async function handleDirectPrompt(
 }
 
 /**
- * Applies a fuzzy patch to the file, replacing the matched region with new code.
- * This function is used by both directPrompt and editSummaryPrompt handlers.
- * Returns { success: boolean, patchedText?: string, error?: string }
+ * Apply code changes to a file using AST-based location, with fallback to text matching.
+ * 
+ * Priority:
+ * 1. AST-based location if anchor provided (most reliable)
+ * 2. Text matching fallback if AST unavailable or confidence below threshold
+ * 
+ * @param fileUri URI of the file to modify
+ * @param document The text document
+ * @param originalCode The code to find and replace
+ * @param newCode The replacement code
+ * @param offset Character offset hint
+ * @param filePath Full file path for AST locator
+ * @param astAnchor Optional AST anchor for structural navigation
+ * @returns Result with success status, patched text, and error info
  */
 async function applyFuzzyPatchAndReplaceInFile(
     fileUri: vscode.Uri,
     document: vscode.TextDocument,
     originalCode: string,
     newCode: string,
-    offset: number
+    offset: number,
+    filePath: string,
+    astAnchor?: ASTAnchor
 ): Promise<{ success: boolean; patchedText?: string; error?: string }> {
     try {
         const fileText = document.getText();
+        let startPosition: vscode.Position | null = null;
+        let endPosition: vscode.Position | null = null;
+        let locateMethod = 'text-match';
 
-        // Find the location of the original code in the file
-        const match = findBestMatch(fileText, originalCode, offset);
-        if (match.location === -1) {
-            return { success: false, error: "Could not find the original code in the file. The code may have changed too much." };
+        // Strategy 1: Try AST-based location first
+        if (astAnchor && filePath) {
+            console.log('[APPLY CHANGES] Attempting AST-based code location');
+
+            const locateResult = await resolveCodeWithAST(
+                filePath,
+                originalCode,
+                offset,
+                astAnchor,
+                astLocator
+            );
+
+            if (isConfidentMatch(locateResult, 0.5) && locateResult.currentRange) {
+                // Use AST's exact range (1-based line, 0-based column)
+                startPosition = new vscode.Position(
+                    locateResult.currentRange.startLine - 1,
+                    locateResult.currentRange.startColumn
+                );
+                endPosition = new vscode.Position(
+                    locateResult.currentRange.endLine - 1,
+                    locateResult.currentRange.endColumn
+                );
+
+                locateMethod = 'ast-based';
+
+                console.log('[APPLY CHANGES] AST location successful', {
+                    confidence: locateResult.confidence,
+                    startLine: locateResult.currentRange.startLine,
+                    startColumn: locateResult.currentRange.startColumn,
+                    endLine: locateResult.currentRange.endLine,
+                    endColumn: locateResult.currentRange.endColumn,
+                    lines: locateResult.currentLines
+                });
+            } else {
+                console.warn('[APPLY CHANGES] AST location confidence too low', {
+                    confidence: locateResult.confidence,
+                    error: locateResult.error
+                });
+                // Fall through to text matching
+            }
+        }
+
+        // Strategy 2: Fallback to text matching if AST failed or unavailable
+        if (!startPosition || !endPosition) {
+            console.log('[APPLY CHANGES] Falling back to text matching');
+
+            const match = findBestMatch(fileText, originalCode, offset);
+            if (match.location !== -1) {
+                startPosition = document.positionAt(match.location);
+                endPosition = document.positionAt(match.location + originalCode.length);
+                locateMethod = 'text-match';
+
+                console.log('[APPLY CHANGES] Text matching successful', {
+                    location: match.location,
+                    score: match.score
+                });
+            } else {
+                return {
+                    success: false,
+                    error: 'Could not locate the code in the file. The code may have been modified significantly.'
+                };
+            }
         }
 
         // Apply the patch
         const patchResult = applyPatch(originalCode, newCode);
         if (!patchResult.success) {
+            console.error('[APPLY CHANGES] Patch generation failed', patchResult);
             return patchResult;
         }
 
+        console.log('[APPLY CHANGES] Patch generated successfully', {
+            method: locateMethod,
+            originalLength: originalCode.length,
+            patchedLength: patchResult.patchedText?.length
+        });
+
+        // Apply edit to document using the precise range
         const edit = new vscode.WorkspaceEdit();
-        const start = document.positionAt(match.location);
-        const end = document.positionAt(match.location + originalCode.length);
-        edit.replace(fileUri, new vscode.Range(start, end), patchResult.patchedText!);
+        edit.replace(fileUri, new vscode.Range(startPosition, endPosition), patchResult.patchedText!);
 
         const success = await vscode.workspace.applyEdit(edit);
         if (!success) {
-            return { success: false, error: "Failed to apply edit to the file." };
+            return {
+                success: false,
+                error: 'Failed to apply edit to the file. The file may be read-only or locked.'
+            };
         }
+
+        console.log('[APPLY CHANGES] Edit applied successfully', {
+            method: locateMethod,
+            startLine: startPosition.line + 1,
+            endLine: endPosition.line + 1
+        });
 
         return { success: true, patchedText: patchResult.patchedText };
     } catch (error) {
+        console.error('[APPLY CHANGES] Unexpected error:', error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : "An unexpected error occurred while applying changes."
+            error: error instanceof Error ? error.message : 'An unexpected error occurred while applying changes.'
         };
     }
 }
@@ -979,7 +982,16 @@ async function applyCodeChanges(
         diffStateMap.set(fileUri.fsPath, { tempFilePath });
 
         // --- Apply the patch ---
-        const result = await applyFuzzyPatchAndReplaceInFile(fileUri, document, originalCode, newCode, offset);
+        const astAnchor = message.astAnchor ? (message.astAnchor as ASTAnchor | undefined) : undefined;
+        const result = await applyFuzzyPatchAndReplaceInFile(
+            fileUri,
+            document,
+            originalCode,
+            newCode,
+            offset,
+            fullPath,
+            astAnchor
+        );
 
         if (!result.success) {
             webviewContainer.webview.postMessage({
@@ -1026,17 +1038,25 @@ async function applyCodeChanges(
 /**
  * Handles the checkSectionValidity command.
  * Checks if the file exists and if the original code can be matched.
- * Uses AST-based location with fallback to text matching.
- * If matched, opens the file and navigates to the match.
- * @param message The message containing fullPath, originalCode, offset, and optional astAnchor
+ * Uses AST-based location to resolve code segments independently, handling parallel nodes correctly.
+ * If matched, opens the file and navigates to highlight all matched regions.
+ * 
+ * Message format: {
+ *   fullPath: string,
+ *   codeSegments: Array<{code: string, line: number, astNodeRef?: {anchor: ASTAnchor, originalText: string}}>,
+ *   filename?: string
+ * }
+ * 
+ * @param message The message containing fullPath, codeSegments array with individual AST node refs
  * @param webviewContainer The webview panel or view instance
  */
 async function handleCheckSectionValidity(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
-    const { fullPath, originalCode, offset, astAnchor } = message;
-    if (!fullPath || !originalCode) {
+    const { fullPath, codeSegments, filename } = message;
+
+    if (!fullPath || !Array.isArray(codeSegments) || codeSegments.length === 0) {
         webviewContainer.webview.postMessage({
             command: 'sectionValidityResult',
             status: 'file_missing'
@@ -1044,59 +1064,132 @@ async function handleCheckSectionValidity(
         return;
     }
 
-    // Try to open the file
-    const fileInfo = await openFile("", fullPath);
-    if (!fileInfo) {
-        webviewContainer.webview.postMessage({
-            command: 'sectionValidityResult',
-            status: 'file_missing'
-        });
-        return;
-    }
-
-    const { document } = fileInfo;
-
-    // Try AST-based location first (if anchor provided), then fallback to text matching
     try {
-        const locateResult = await astLocator.locateCode(
-            fullPath,
-            originalCode,
-            offset || 0,
-            astAnchor as ASTAnchor | undefined
-        );
-
-        if (!locateResult.found || locateResult.confidence < 0.5) {
+        // Try to open the file
+        const fileInfo = await openFile(filename || "", fullPath);
+        if (!fileInfo) {
             webviewContainer.webview.postMessage({
                 command: 'sectionValidityResult',
-                status: 'code_not_matched',
-                method: locateResult.method,
-                confidence: locateResult.confidence
+                status: 'file_missing'
             });
             return;
         }
 
-        // If matched, open the file and navigate to the match location
+        const { document } = fileInfo;
+
+        // Resolve each segment independently using AST
+        const segmentResults: Array<{
+            segment: any;
+            locateResult: any;
+            ranges: vscode.Range[];
+        }> = [];
+
+        for (const seg of codeSegments) {
+            if (!seg || typeof seg.line !== 'number' || seg.line <= 0) {
+                continue;
+            }
+
+            let locateResult = null;
+
+            // Use AST-based resolution if anchor available
+            if (seg.astNodeRef?.anchor && fullPath) {
+                console.log('[SECTION VALIDITY] Resolving segment with AST', {
+                    line: seg.line,
+                    pathLength: seg.astNodeRef.anchor.path.length
+                });
+
+                locateResult = await resolveCodeWithAST(
+                    fullPath,
+                    seg.astNodeRef.originalText,
+                    seg.astNodeRef.anchor.originalOffset,
+                    seg.astNodeRef.anchor,
+                    astLocator
+                );
+            } else {
+                console.warn('[SECTION VALIDITY] No AST reference for segment at line', seg.line);
+                continue;
+            }
+
+            // Only process confident matches
+            if (isConfidentMatch(locateResult, 0.5)) {
+                console.log('[SECTION VALIDITY] Segment resolved successfully', {
+                    originalLine: seg.line,
+                    resolvedLines: locateResult.currentLines,
+                    confidence: locateResult.confidence
+                });
+
+                // Build ranges for this segment
+                const ranges = locateResult.currentRange
+                    ? buildRangesFromASTResult(document, locateResult.currentRange)
+                    : [];
+
+                segmentResults.push({
+                    segment: seg,
+                    locateResult,
+                    ranges
+                });
+            } else {
+                console.warn('[SECTION VALIDITY] Segment resolution failed', {
+                    line: seg.line,
+                    confidence: locateResult.confidence,
+                    error: locateResult.error
+                });
+            }
+        }
+
+        if (segmentResults.length === 0) {
+            webviewContainer.webview.postMessage({
+                command: 'sectionValidityResult',
+                status: 'code_not_matched',
+                details: 'No segments could be resolved'
+            });
+            return;
+        }
+
+        // Collect all ranges from all segments for selection
+        const allRanges = segmentResults.flatMap(r => r.ranges);
+
+        // Open file and navigate to first match, selecting all matched regions
         try {
             const editor = await vscode.window.showTextDocument(document, { preview: false });
-            if (locateResult.currentLines) {
-                const [startLine, endLine] = locateResult.currentLines;
-                const start = new vscode.Position(startLine - 1, 0);
-                const end = document.lineAt(Math.min(endLine - 1, document.lineCount - 1)).range.end;
-                editor.selection = new vscode.Selection(start, end);
-                editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+
+            if (allRanges.length > 0) {
+                // Create selection from first to last range
+                let minStart = allRanges[0].start;
+                let maxEnd = allRanges[0].end;
+
+                for (const range of allRanges) {
+                    if (range.start.isBefore(minStart)) {
+                        minStart = range.start;
+                    }
+                    if (range.end.isAfter(maxEnd)) {
+                        maxEnd = range.end;
+                    }
+                }
+
+                editor.selection = new vscode.Selection(minStart, maxEnd);
+                editor.revealRange(new vscode.Range(minStart, maxEnd), vscode.TextEditorRevealType.InCenter);
             }
         } catch (e) {
             // Ignore navigation errors, still report success
+            console.warn('[SECTION VALIDITY] Navigation error:', e);
         }
 
+        // Report success with per-segment details
         webviewContainer.webview.postMessage({
             command: 'sectionValidityResult',
             status: 'success',
-            method: locateResult.method,
-            confidence: locateResult.confidence,
-            currentLines: locateResult.currentLines
+            totalSegments: codeSegments.length,
+            resolvedSegments: segmentResults.length,
+            segmentDetails: segmentResults.map(r => ({
+                originalLine: r.segment.line,
+                resolvedLines: r.locateResult.currentLines,
+                confidence: r.locateResult.confidence,
+                method: r.locateResult.method
+            }))
         });
     } catch (error) {
+        console.error('[SECTION VALIDITY] Unexpected error:', error);
         webviewContainer.webview.postMessage({
             command: 'sectionValidityResult',
             status: 'code_not_matched',

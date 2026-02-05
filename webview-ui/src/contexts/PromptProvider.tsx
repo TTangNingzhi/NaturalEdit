@@ -26,7 +26,8 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     metadata.originalCode,
                     metadata.filename,
                     metadata.fullPath,
-                    metadata.offset
+                    metadata.offset,
+                    metadata.astAnchor
                 );
             });
         },
@@ -58,7 +59,8 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     metadata.originalCode,
                     metadata.filename,
                     metadata.fullPath,
-                    metadata.offset
+                    metadata.offset,
+                    metadata.astAnchor
                 );
             });
         },
@@ -90,7 +92,8 @@ export const PromptProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     metadata.filename,
                     metadata.fullPath,
                     metadata.offset,
-                    originalSummary
+                    originalSummary,
+                    metadata.astAnchor
                 );
             });
         }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import SummaryDisplay from "./SummaryDisplay.js";
 import PromptPanel from "./PromptPanel.js";
 import { SectionData, DetailLevel, StructuredType } from "../types/sectionTypes.js";
@@ -38,7 +38,10 @@ const SectionBody: React.FC<SectionBodyProps> = ({
 
     // Get the mapping array for the current summary type
     const mappingKey = `${selectedDetailLevel}_${selectedStructured}` as keyof typeof summaryMappings;
-    const rawMappings = summaryMappings?.[mappingKey] || [];
+    const rawMappings = useMemo(
+        () => summaryMappings?.[mappingKey] || [],
+        [summaryMappings, mappingKey]
+    );
 
     /**
      * Handles hover events on summary mapping components.
@@ -131,13 +134,23 @@ const SectionBody: React.FC<SectionBodyProps> = ({
 
     // Effect: On mount, check section validity with backend
     useEffect(() => {
+        // Build code segments array from all mappings of current detail level
+        // This allows handling of parallel AST nodes separately
+        const codeSegments = rawMappings.flatMap(mapping =>
+            mapping.codeSegments.map(segment => ({
+                code: segment.code,
+                line: segment.line,
+                astNodeRef: segment.astNodeRef
+            }))
+        );
+
         // Send message to backend to check file and code validity
+        // Pass segments array with AST node references so backend can resolve each independently
         vscodeApi.postMessage({
             command: "checkSectionValidity",
             fullPath: section.metadata.fullPath,
-            originalCode: section.metadata.originalCode,
-            offset: section.metadata.offset,
-            astAnchor: section.metadata.astAnchor
+            codeSegments,
+            filename: section.metadata.filename
         });
 
         // Handler for backend response
@@ -158,7 +171,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
         return () => {
             window.removeEventListener("message", handleMessage);
         };
-    }, [section.metadata.astAnchor, section.metadata.fullPath, section.metadata.offset, section.metadata.originalCode]);
+    }, [section.metadata.fullPath, section.metadata.filename, rawMappings]);
 
     // Overlay message based on validity status
     let overlayMessage = "";
