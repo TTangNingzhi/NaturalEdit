@@ -10,6 +10,7 @@ import { logInteractionFromFrontend } from '../utils/telemetry';
 import { ASTCodeLocator } from '../utils/astCodeLocator';
 import { ASTMappingProcessor } from '../utils/astMappingProcessor';
 import { ASTAnchor } from '../types/astTypes';
+import { ASTParser } from '../utils/astParser';
 import { resolveCodeWithAST, buildRangesFromASTResult, isConfidentMatch } from '../utils/astRangeBuilder';
 
 // Color palette for summary-code mapping highlights (must match frontend)
@@ -142,6 +143,14 @@ function findBestMatch(
     }
 
     return { location: -1 };
+}
+
+/**
+ * Exact string matching only (case-sensitive)
+ */
+function findExactMatch(text: string, pattern: string, offset: number = 0): MatchResult {
+    const location = text.indexOf(pattern, offset);
+    return { location };
 }
 
 /**
@@ -294,6 +303,8 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
 
     // Shared: Document text retrieval
     const docText = editor.document.getText();
+    const astParser = ASTParser.getInstance();
+    const isAstSupported = fullPath ? astParser.isLanguageSupported(fullPath) : false;
 
     // Highlight mode: Validate region match
     if (mode === 'highlight') {
@@ -321,8 +332,8 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
         for (const seg of filteredSegments) {
             console.log(`[VISUAL MAPPING] Processing segment`, { code: seg.code, line: seg.line });
 
-            // Use AST-based resolution if anchor available
-            if (seg.astNodeRef?.anchor && fullPath) {
+            // Use AST-based resolution if supported and anchor available
+            if (isAstSupported && seg.astNodeRef?.anchor && fullPath) {
                 console.log(`  [AST PATH]`, {
                     path: seg.astNodeRef.anchor.path,
                     pathTypes: seg.astNodeRef.anchor.pathTypes,
@@ -353,6 +364,23 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
                         confidence: locateResult.confidence,
                         error: locateResult.error
                     });
+                }
+            } else if (!isAstSupported && fullPath) {
+                const exactText = seg.astNodeRef?.originalText || seg.code;
+                const lineOffset = Math.max(0, seg.line - 1);
+                const startOffset = editor.document.offsetAt(new vscode.Position(lineOffset, 0));
+                const exactMatch = findExactMatch(docText, exactText, startOffset);
+
+                if (exactMatch.location !== -1) {
+                    const start = editor.document.positionAt(exactMatch.location);
+                    const end = editor.document.positionAt(exactMatch.location + exactText.length);
+                    const rangesToAdd = buildRangesFromASTResult(editor.document, {
+                        startLine: start.line + 1,
+                        startColumn: start.character,
+                        endLine: end.line + 1,
+                        endColumn: end.character
+                    });
+                    allRanges.push(...rangesToAdd);
                 }
             } else {
                 console.warn(`  [NO AST REFERENCE] Skipping ${mode} for line ${seg.line}`);
@@ -802,9 +830,11 @@ async function applyFuzzyPatchAndReplaceInFile(
         let startPosition: vscode.Position | null = null;
         let endPosition: vscode.Position | null = null;
         let locateMethod = 'text-match';
+        const astParser = ASTParser.getInstance();
+        const isAstSupported = filePath ? astParser.isLanguageSupported(filePath) : false;
 
-        // Strategy 1: Try AST-based location first
-        if (astAnchor && filePath) {
+        // Strategy 1: Try AST-based location first (only if supported)
+        if (isAstSupported && astAnchor && filePath) {
             console.log('[APPLY CHANGES] Attempting AST-based code location');
 
             const locateResult = await resolveCodeWithAST(
@@ -849,11 +879,13 @@ async function applyFuzzyPatchAndReplaceInFile(
         if (!startPosition || !endPosition) {
             console.log('[APPLY CHANGES] Falling back to text matching');
 
-            const match = findBestMatch(fileText, originalCode, offset);
+            const match = isAstSupported
+                ? findBestMatch(fileText, originalCode, offset)
+                : findExactMatch(fileText, originalCode, offset);
             if (match.location !== -1) {
                 startPosition = document.positionAt(match.location);
                 endPosition = document.positionAt(match.location + originalCode.length);
-                locateMethod = 'text-match';
+                locateMethod = isAstSupported ? 'text-match' : 'exact-match';
 
                 console.log('[APPLY CHANGES] Text matching successful', {
                     location: match.location,
@@ -1076,6 +1108,9 @@ async function handleCheckSectionValidity(
         }
 
         const { document } = fileInfo;
+        const astParser = ASTParser.getInstance();
+        const isAstSupported = astParser.isLanguageSupported(fullPath);
+        const documentText = document.getText();
 
         // Resolve each segment independently using AST
         const segmentResults: Array<{
@@ -1091,8 +1126,8 @@ async function handleCheckSectionValidity(
 
             let locateResult = null;
 
-            // Use AST-based resolution if anchor available
-            if (seg.astNodeRef?.anchor && fullPath) {
+            // Use AST-based resolution if supported and anchor available
+            if (isAstSupported && seg.astNodeRef?.anchor && fullPath) {
                 console.log('[SECTION VALIDITY] Resolving segment with AST', {
                     line: seg.line,
                     pathLength: seg.astNodeRef.anchor.path.length
@@ -1105,13 +1140,31 @@ async function handleCheckSectionValidity(
                     seg.astNodeRef.anchor,
                     astLocator
                 );
+            } else if (!isAstSupported) {
+                const exactText = seg.astNodeRef?.originalText || seg.code;
+                const exactMatch = findExactMatch(documentText, exactText, 0);
+                if (exactMatch.location !== -1) {
+                    const start = document.positionAt(exactMatch.location);
+                    const end = document.positionAt(exactMatch.location + exactText.length);
+                    segmentResults.push({
+                        segment: seg,
+                        locateResult: {
+                            found: true,
+                            method: 'exact-match',
+                            confidence: 1,
+                            currentLines: [start.line + 1, end.line + 1]
+                        },
+                        ranges: [new vscode.Range(start, end)]
+                    });
+                }
+                continue;
             } else {
                 console.warn('[SECTION VALIDITY] No AST reference for segment at line', seg.line);
                 continue;
             }
 
             // Only process confident matches
-            if (isConfidentMatch(locateResult, 0.5)) {
+            if (locateResult && isConfidentMatch(locateResult, 0.5)) {
                 console.log('[SECTION VALIDITY] Segment resolved successfully', {
                     originalLine: seg.line,
                     resolvedLines: locateResult.currentLines,
@@ -1131,8 +1184,8 @@ async function handleCheckSectionValidity(
             } else {
                 console.warn('[SECTION VALIDITY] Segment resolution failed', {
                     line: seg.line,
-                    confidence: locateResult.confidence,
-                    error: locateResult.error
+                    confidence: locateResult?.confidence,
+                    error: locateResult?.error
                 });
             }
         }

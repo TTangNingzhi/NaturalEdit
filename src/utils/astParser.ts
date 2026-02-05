@@ -10,6 +10,16 @@ export enum Language {
     Python = 'python',
     TSX = 'tsx',
     JSX = 'javascript',
+    Rust = 'rust',
+    Go = 'go',
+    Cpp = 'cpp',
+    C = 'c',
+    CSharp = 'c_sharp',
+    Ruby = 'ruby',
+    Java = 'java',
+    Php = 'php',
+    Swift = 'swift',
+    Kotlin = 'kotlin',
 }
 
 /**
@@ -77,6 +87,16 @@ export class ASTParser {
             await this.loadLanguage(Language.JavaScript, 'tree-sitter-javascript.wasm', basePath);
             await this.loadLanguage(Language.Python, 'tree-sitter-python.wasm', basePath);
             await this.loadLanguage(Language.TSX, 'tree-sitter-tsx.wasm', basePath);
+            await this.loadLanguage(Language.Rust, 'tree-sitter-rust.wasm', basePath);
+            await this.loadLanguage(Language.Go, 'tree-sitter-go.wasm', basePath);
+            await this.loadLanguage(Language.Cpp, 'tree-sitter-cpp.wasm', basePath);
+            await this.loadLanguage(Language.C, 'tree-sitter-c.wasm', basePath);
+            await this.loadLanguage(Language.CSharp, 'tree-sitter-c_sharp.wasm', basePath);
+            await this.loadLanguage(Language.Ruby, 'tree-sitter-ruby.wasm', basePath);
+            await this.loadLanguage(Language.Java, 'tree-sitter-java.wasm', basePath);
+            await this.loadLanguage(Language.Php, 'tree-sitter-php.wasm', basePath);
+            await this.loadLanguage(Language.Swift, 'tree-sitter-swift.wasm', basePath);
+            await this.loadLanguage(Language.Kotlin, 'tree-sitter-kotlin.wasm', basePath);
 
             this.initialized = true;
         } catch (error) {
@@ -106,22 +126,51 @@ export class ASTParser {
         const ext = path.extname(filePath).toLowerCase();
 
         switch (ext) {
+            case '.js':
+            case '.jsx':
+                return Language.JavaScript;
             case '.ts':
                 return Language.TypeScript;
             case '.tsx':
                 return Language.TSX;
-            case '.js':
-                return Language.JavaScript;
-            case '.mjs':
-            case '.cjs':
-                return Language.JavaScript;
-            case '.jsx':
-                return Language.JavaScript;
             case '.py':
                 return Language.Python;
+            case '.rs':
+                return Language.Rust;
+            case '.go':
+                return Language.Go;
+            case '.cpp':
+            case '.hpp':
+                return Language.Cpp;
+            case '.c':
+            case '.h':
+                return Language.C;
+            case '.cs':
+                return Language.CSharp;
+            case '.rb':
+                return Language.Ruby;
+            case '.java':
+                return Language.Java;
+            case '.php':
+                return Language.Php;
+            case '.swift':
+                return Language.Swift;
+            case '.kt':
+                return Language.Kotlin;
             default:
                 return null;
         }
+    }
+
+    /**
+     * Check whether a file path is supported and a grammar is loaded
+     */
+    public isLanguageSupported(filePath: string): boolean {
+        const language = this.detectLanguage(filePath);
+        if (!language) {
+            return false;
+        }
+        return this.languages.has(language);
     }
 
     /**

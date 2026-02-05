@@ -18,7 +18,22 @@ const copyWasmFiles = {
 
 			// Copy language grammar WASMs
 			const wasmSourceDir = path.join(__dirname, "node_modules", "tree-sitter-wasms", "out");
-			const langs = ["python", "javascript", "typescript", "tsx"];
+			const langs = [
+				"python",
+				"javascript",
+				"typescript",
+				"tsx",
+				"rust",
+				"go",
+				"cpp",
+				"c",
+				"c_sharp",
+				"ruby",
+				"java",
+				"php",
+				"swift",
+				"kotlin"
+			];
 
 			for (const lang of langs) {
 				const wasmFile = `tree-sitter-${lang}.wasm`;
