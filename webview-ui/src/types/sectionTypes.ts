@@ -100,6 +100,10 @@ export interface SectionData {
         high_unstructured: SummaryCodeMapping[];
         high_structured: SummaryCodeMapping[];
     };
+    // Code validity tracking
+    isCodeValid?: boolean;
+    validationError?: string;
+    lastValidationTime?: number;
 }
 
 /**
@@ -123,6 +127,7 @@ export interface SummaryResultMessage {
     createdAt?: string;
     originalCode?: string;
     offset?: number;
+    sectionId?: string; // Backend-generated section ID for file tracking
     astAnchor?: ASTAnchor; // AST anchor for robust code location
     sessionCodeSegments?: CodeSegment[]; // AST-based segments covering the full session
     summaryMappings?: {
@@ -145,4 +150,27 @@ export interface EditResultMessage {
     action: string;
     sectionId: string;
     newCode: string;
+}
+
+/**
+ * Message from VSCode indicating section validity status.
+ */
+export interface SectionValidityBatchMessage {
+    command: "sectionValidityBatch";
+    results: Array<{
+        sectionId: string;
+        isCodeValid: boolean;
+        validationError?: string;
+    }>;
+}
+
+/**
+ * Message from VSCode containing extracted section code.
+ */
+export interface ExtractedSectionCodeMessage {
+    command: "extractedSectionCode";
+    sectionId: string;
+    newCode?: string;
+    segmentCount?: number;
+    error?: string;
 }

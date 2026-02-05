@@ -51,6 +51,35 @@ let currentHighlight: {
 const diffStateMap: Map<string, { tempFilePath: string }> = new Map();
 
 /**
+ * Map to track section-file associations for code validity checking.
+ * Key: file path, Value: Set of section IDs associated with that file
+ */
+const sectionFileMap: Map<string, Set<string>> = new Map();
+
+/**
+ * Cache for section metadata needed for validation.
+ * Key: sectionId, Value: { fullPath, sessionCodeSegments, astAnchor }
+ */
+interface SectionCacheEntry {
+    fullPath: string;
+    filename: string;
+    sessionCodeSegments: Array<{ code: string; line: number; astNodeRef?: any }>;
+    astAnchor?: any;
+    offset: number;
+}
+const sectionMetadataCache: Map<string, SectionCacheEntry> = new Map();
+
+/**
+ * Debounce timer for file change validation
+ */
+let validationDebounceTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Set to track which files have pending validation
+ */
+const filesAwaitingValidation: Set<string> = new Set();
+
+/**
  * Interface for match result
  */
 interface MatchResult {
@@ -235,6 +264,9 @@ export async function handleMessage(
             break;
         case 'checkSectionValidity':
             await handleCheckSectionValidity(message, webviewContainer);
+            break;
+        case 'extractCurrentSectionCode':
+            await handleExtractCurrentSectionCode(message, webviewContainer);
             break;
         case 'interactionLog':
             await logInteractionFromFrontend({
@@ -705,6 +737,18 @@ async function handleGetSummary(
         // - codeSegments from summaryMappings (includes line numbers and astNodeRef)
         // - This triggers AST resolution to find current locations before highlighting
 
+        // Register the section for file change tracking
+        const sectionId = uuidv4();
+        if (fullPath) {
+            registerSection(sectionId, fullPath, filename, {
+                fullPath,
+                filename,
+                sessionCodeSegments: sessionCodeSegments || [],
+                astAnchor,
+                offset
+            });
+        }
+
         // Final result: send summaryResult to frontend
         webviewContainer.webview.postMessage({
             command: 'summaryResult',
@@ -719,6 +763,7 @@ async function handleGetSummary(
             summaryMappings,
             astAnchor,
             sessionCodeSegments,
+            sectionId,
             ...(oldSummaryData ? { oldSummaryData } : {})
         });
     } catch (err: any) {
@@ -1256,6 +1301,332 @@ async function handleCheckSectionValidity(
             command: 'sectionValidityResult',
             status: 'code_not_matched',
             error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+}
+
+/**
+ * Register a section with file mappings for later validity checking
+ * Called when a new summary is created
+ */
+export function registerSection(sectionId: string, fullPath: string, filename: string, metadata: SectionCacheEntry) {
+    // Add to section-file map
+    if (!sectionFileMap.has(fullPath)) {
+        sectionFileMap.set(fullPath, new Set());
+    }
+    sectionFileMap.get(fullPath)!.add(sectionId);
+
+    // Cache the metadata
+    sectionMetadataCache.set(sectionId, metadata);
+
+    console.log(`[SECTION REGISTRY] Registered section ${sectionId} for file ${filename}`);
+}
+
+/**
+ * Unregister a section (e.g., when deleted)
+ */
+export function unregisterSection(sectionId: string, fullPath: string) {
+    const sections = sectionFileMap.get(fullPath);
+    if (sections) {
+        sections.delete(sectionId);
+        if (sections.size === 0) {
+            sectionFileMap.delete(fullPath);
+        }
+    }
+    sectionMetadataCache.delete(sectionId);
+}
+
+/**
+ * Trigger validation for all sections associated with a file
+ * This is called when a file is detected to have changed
+ * Uses debouncing to avoid redundant checks
+ */
+export function scheduleValidationForFile(filePath: string, webviewContainer: vscode.WebviewPanel | vscode.WebviewView, debounceMs: number = 500) {
+    filesAwaitingValidation.add(filePath);
+
+    // Clear existing debounce timer
+    if (validationDebounceTimer) {
+        clearTimeout(validationDebounceTimer);
+    }
+
+    // Set new debounce timer
+    validationDebounceTimer = setTimeout(async () => {
+        validationDebounceTimer = null;
+
+        // Process all files awaiting validation
+        for (const file of filesAwaitingValidation) {
+            await validateSectionsForFile(file, webviewContainer);
+        }
+
+        filesAwaitingValidation.clear();
+    }, debounceMs);
+}
+
+/**
+ * Validate all sections associated with a specific file
+ * Sends batch validation results to frontend
+ */
+async function validateSectionsForFile(
+    filePath: string,
+    webviewContainer: vscode.WebviewPanel | vscode.WebviewView
+) {
+    const sectionIds = sectionFileMap.get(filePath);
+    if (!sectionIds || sectionIds.size === 0) {
+        console.log(`[VALIDATION] No sections registered for file ${filePath}`);
+        return;
+    }
+
+    console.log(`[VALIDATION] Validating ${sectionIds.size} sections for file ${filePath}`);
+
+    const validationResults: Array<{
+        sectionId: string;
+        isCodeValid: boolean;
+        validationError?: string;
+    }> = [];
+
+    for (const sectionId of sectionIds) {
+        const cacheEntry = sectionMetadataCache.get(sectionId);
+        if (!cacheEntry) {
+            console.warn(`[VALIDATION] No metadata found for section ${sectionId}`);
+            continue;
+        }
+
+        // Use the existing validation logic
+        const result = await validateSectionCode(sectionId, cacheEntry);
+        validationResults.push({
+            sectionId,
+            isCodeValid: result.isValid,
+            validationError: result.error
+        });
+    }
+
+    if (validationResults.length > 0) {
+        console.log(`[VALIDATION] Sending batch validation results:`, validationResults);
+        webviewContainer.webview.postMessage({
+            command: 'sectionValidityBatch',
+            results: validationResults
+        });
+    }
+}
+
+/**
+ * Validate a single section's code
+ * Returns whether code is still valid and any error message
+ */
+async function validateSectionCode(
+    sectionId: string,
+    cacheEntry: SectionCacheEntry
+): Promise<{ isValid: boolean; error?: string }> {
+    const { fullPath, sessionCodeSegments, astAnchor, offset } = cacheEntry;
+
+    try {
+        // Open the file
+        const fileUri = vscode.Uri.file(fullPath);
+        let document: vscode.TextDocument;
+        try {
+            document = await vscode.workspace.openTextDocument(fileUri);
+        } catch {
+            return { isValid: false, error: 'File not found or cannot be opened' };
+        }
+
+        const astParser = ASTParser.getInstance();
+        const isAstSupported = astParser.isLanguageSupported(fullPath);
+        const documentText = document.getText();
+
+        // Try to validate using AST if supported
+        if (isAstSupported && astAnchor && sessionCodeSegments && sessionCodeSegments.length > 0) {
+            let successCount = 0;
+
+            for (const seg of sessionCodeSegments) {
+                if (!seg.astNodeRef?.anchor) {
+                    // No AST reference, skip
+                    continue;
+                }
+
+                const locateResult = await resolveCodeWithAST(
+                    fullPath,
+                    seg.astNodeRef.originalText,
+                    seg.astNodeRef.anchor.originalOffset,
+                    seg.astNodeRef.anchor,
+                    astLocator
+                );
+
+                if (isConfidentMatch(locateResult, 0.5)) {
+                    successCount++;
+                }
+            }
+
+            // Consider valid if at least 80% of segments match
+            const matchRatio = successCount / sessionCodeSegments.length;
+            if (matchRatio >= 0.8) {
+                return { isValid: true };
+            } else {
+                return {
+                    isValid: false,
+                    error: `Code validation failed: only ${Math.round(matchRatio * 100)}% of code segments matched`
+                };
+            }
+        }
+
+        // Fallback to text-based validation if AST not supported
+        if (sessionCodeSegments && sessionCodeSegments.length > 0) {
+            let foundCount = 0;
+
+            for (const seg of sessionCodeSegments) {
+                const match = findBestMatch(documentText, seg.code, offset);
+                if (match.location !== -1) {
+                    foundCount++;
+                }
+            }
+
+            const matchRatio = foundCount / sessionCodeSegments.length;
+            if (matchRatio >= 0.8) {
+                return { isValid: true };
+            } else {
+                return {
+                    isValid: false,
+                    error: `Code validation failed: only ${Math.round(matchRatio * 100)}% of code segments found`
+                };
+            }
+        }
+
+        // If no segments to validate, consider it valid
+        return { isValid: true };
+    } catch (error) {
+        console.error(`[VALIDATION] Error validating section ${sectionId}:`, error);
+        return {
+            isValid: false,
+            error: error instanceof Error ? error.message : 'Unknown validation error'
+        };
+    }
+}
+
+/**
+ * Extract the current section code from the file
+ * Locates all code segments in the current file and concatenates them
+ * This is used when regenerating summary after code changes
+ */
+async function handleExtractCurrentSectionCode(
+    message: any,
+    webviewContainer: vscode.WebviewPanel | vscode.WebviewView
+) {
+    const { sectionId, fullPath, sessionCodeSegments } = message;
+
+    if (!sectionId || !fullPath || !Array.isArray(sessionCodeSegments)) {
+        webviewContainer.webview.postMessage({
+            command: 'extractedSectionCode',
+            sectionId,
+            error: 'Missing required parameters'
+        });
+        return;
+    }
+
+    try {
+        // Open the file
+        const fileUri = vscode.Uri.file(fullPath);
+        let document: vscode.TextDocument;
+        try {
+            document = await vscode.workspace.openTextDocument(fileUri);
+        } catch {
+            webviewContainer.webview.postMessage({
+                command: 'extractedSectionCode',
+                sectionId,
+                error: 'File not found or cannot be opened'
+            });
+            return;
+        }
+
+        const astParser = ASTParser.getInstance();
+        const isAstSupported = astParser.isLanguageSupported(fullPath);
+        const documentText = document.getText();
+
+        const extractedSegments: string[] = [];
+
+        // Try to extract current code using AST if supported
+        if (isAstSupported) {
+            for (const seg of sessionCodeSegments) {
+                if (!seg.astNodeRef?.anchor) {
+                    // No AST reference, skip
+                    continue;
+                }
+
+                const locateResult = await resolveCodeWithAST(
+                    fullPath,
+                    seg.astNodeRef.originalText,
+                    seg.astNodeRef.anchor.originalOffset,
+                    seg.astNodeRef.anchor,
+                    astLocator
+                );
+
+                if (isConfidentMatch(locateResult, 0.5) && locateResult.currentRange) {
+                    // Extract the code at this range
+                    const startPos = new vscode.Position(
+                        locateResult.currentRange.startLine - 1,
+                        locateResult.currentRange.startColumn
+                    );
+                    const endPos = new vscode.Position(
+                        locateResult.currentRange.endLine - 1,
+                        locateResult.currentRange.endColumn
+                    );
+                    const range = new vscode.Range(startPos, endPos);
+                    const extractedCode = document.getText(range);
+                    extractedSegments.push(extractedCode);
+
+                    console.log(`[EXTRACT] Extracted segment at line ${locateResult.currentRange.startLine}:`, {
+                        confidence: locateResult.confidence,
+                        codeLength: extractedCode.length
+                    });
+                } else {
+                    console.warn(`[EXTRACT] Failed to locate segment with AST`, {
+                        line: seg.line,
+                        confidence: locateResult.confidence
+                    });
+                }
+            }
+        } else {
+            // Fallback to text-based extraction if AST not supported
+            for (const seg of sessionCodeSegments) {
+                const match = findBestMatch(documentText, seg.code, 0);
+                if (match.location !== -1) {
+                    const start = document.positionAt(match.location);
+                    const end = document.positionAt(match.location + seg.code.length);
+                    const range = new vscode.Range(start, end);
+                    const extractedCode = document.getText(range);
+                    extractedSegments.push(extractedCode);
+
+                    console.log(`[EXTRACT] Extracted segment via fuzzy match:`, {
+                        codeLength: extractedCode.length
+                    });
+                }
+            }
+        }
+
+        // Concatenate all extracted segments with newlines
+        const newCode = extractedSegments.join('\n\n');
+
+        if (!newCode || newCode.trim().length === 0) {
+            webviewContainer.webview.postMessage({
+                command: 'extractedSectionCode',
+                sectionId,
+                error: 'Could not extract any code segments from current file'
+            });
+            return;
+        }
+
+        console.log(`[EXTRACT] Successfully extracted ${extractedSegments.length} segments for section ${sectionId}`);
+
+        webviewContainer.webview.postMessage({
+            command: 'extractedSectionCode',
+            sectionId,
+            newCode,
+            segmentCount: extractedSegments.length
+        });
+    } catch (error) {
+        console.error(`[EXTRACT] Error extracting section code:`, error);
+        webviewContainer.webview.postMessage({
+            command: 'extractedSectionCode',
+            sectionId,
+            error: error instanceof Error ? error.message : 'Unknown extraction error'
         });
     }
 }

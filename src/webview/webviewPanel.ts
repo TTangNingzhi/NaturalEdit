@@ -59,26 +59,9 @@ export class NaturalEditViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Notify the webview that a file has changed
+     * Get the webview instance for triggering validation
      */
-    public notifyFileChanged(filePath: string) {
-        if (this._view) {
-            this._view.webview.postMessage({
-                command: 'fileChanged',
-                filePath
-            });
-        }
-    }
-
-    /**
-     * Notify the webview that a file was deleted
-     */
-    public notifyFileDeleted(filePath: string) {
-        if (this._view) {
-            this._view.webview.postMessage({
-                command: 'fileDeleted',
-                filePath
-            });
-        }
+    public getWebview(): vscode.WebviewView | undefined {
+        return this._view;
     }
 }

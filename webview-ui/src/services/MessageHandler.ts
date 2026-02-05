@@ -5,6 +5,8 @@ import {
     SummaryResultMessage,
     SummaryProgressMessage,
     EditResultMessage,
+    SectionValidityBatchMessage,
+    ExtractedSectionCodeMessage,
     ASTAnchor
 } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
@@ -17,19 +19,21 @@ import { logInteraction } from "../utils/telemetry.js";
  * @param onEditResult Callback for edit results (optional)
  * @param onProgress Callback for progress updates (optional)
  * @param getOldSummaryData Function to get old summary data by sectionId (optional)
+ * @param onSectionValidityBatch Callback for batch section validity updates (optional)
  */
 export const setupMessageHandler = (
     onError: (error: string) => void,
     onNewSection: (section: SectionData) => void,
     onEditResult?: (sectionId: string, action: string, newCode: string) => void,
     onProgress?: (stageText: string) => void,
-    getOldSummaryData?: (sectionId: string) => SummaryData | undefined
+    getOldSummaryData?: (sectionId: string) => SummaryData | undefined,
+    onSectionValidityBatch?: (results: Array<{ sectionId: string; isCodeValid: boolean; validationError?: string }>) => void
 ) => {
     /**
      * Handles incoming messages from VSCode and dispatches to the appropriate callback.
      * Uses discriminated union types for type safety.
      */
-    type MessageFromVSCode = SummaryProgressMessage | SummaryResultMessage | EditResultMessage;
+    type MessageFromVSCode = SummaryProgressMessage | SummaryResultMessage | EditResultMessage | SectionValidityBatchMessage | ExtractedSectionCodeMessage;
 
     // Type guard to check if an object has a string "command" property
     function isVSCodeMessageWithCommand(obj: unknown): obj is { command: string } {
@@ -59,7 +63,8 @@ export const setupMessageHandler = (
                 if (msg.error) {
                     onError(msg.error);
                 } else if (msg.data) {
-                    const id = uuidv4();
+                    // Use sectionId from backend if provided, otherwise generate locally
+                    const id = msg.sectionId || uuidv4();
                     onNewSection({
                         metadata: {
                             id,
@@ -127,6 +132,25 @@ export const setupMessageHandler = (
                     }
                 }
                 break;
+            case "sectionValidityBatch":
+                if (onSectionValidityBatch && (msg as SectionValidityBatchMessage).results) {
+                    onSectionValidityBatch((msg as SectionValidityBatchMessage).results);
+                }
+                break;
+            case "extractedSectionCode":
+                {
+                    const msg2 = msg as ExtractedSectionCodeMessage;
+                    if (msg2.error) {
+                        onError(msg2.error);
+                    } else if (msg2.newCode && typeof msg2.newCode === "string") {
+                        // Request summary with the extracted new code (brand new summary, no reference)
+                        if (onProgress) {
+                            onProgress("Regenerating summary...");
+                        }
+                        requestSummary(msg2.newCode);
+                    }
+                }
+                break;
             default:
                 // Unknown command, ignore
                 break;
@@ -144,6 +168,9 @@ export const setupMessageHandler = (
 export const requestSummary = (newCode?: string, oldSummaryData?: SummaryData) => {
     if (newCode && oldSummaryData) {
         vscodeApi.postMessage({ command: "getSummary", newCode, oldSummaryData });
+    } else if (newCode) {
+        // If only newCode is provided (without oldSummaryData), send it as-is
+        vscodeApi.postMessage({ command: "getSummary", newCode });
     } else if (oldSummaryData) {
         vscodeApi.postMessage({ command: "getSummary", oldSummaryData });
     } else {
@@ -324,6 +351,23 @@ export const createStatefulMessageHandler = (
                 setLoadingText(stageText || "Summarizing modified code...");
             }
         },
-        getOldSummaryData // Pass getter to setupMessageHandler
+        getOldSummaryData, // Pass getter to setupMessageHandler
+        // Callback for section validity batch updates
+        (results) => {
+            setSectionList(prev =>
+                prev.map(s => {
+                    const result = results.find(r => r.sectionId === s.metadata.id);
+                    if (result) {
+                        return {
+                            ...s,
+                            isCodeValid: result.isCodeValid,
+                            validationError: result.validationError,
+                            lastValidationTime: Date.now()
+                        };
+                    }
+                    return s;
+                })
+            );
+        }
     );
 };

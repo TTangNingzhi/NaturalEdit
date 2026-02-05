@@ -3,6 +3,7 @@ import { NaturalEditViewProvider } from './webview/webviewPanel';
 import { initialize, updateApiKey } from './llm/llmApi';
 import { ASTParser } from './utils/astParser';
 import * as path from 'path';
+import { scheduleValidationForFile } from './webview/messageHandler';
 
 /**
  * Stores the most recently active text editor.
@@ -69,18 +70,16 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Set up file watcher for code changes
-	// This helps detect when code has been edited and summaries may need updating
+	// When code is modified, automatically validate all sections for that file
 	const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.{ts,js,tsx,jsx,py}');
 
 	fileWatcher.onDidChange((uri) => {
-		// Notify webview that a file has changed
-		// The webview can decide whether to invalidate sections for this file
-		provider.notifyFileChanged(uri.fsPath);
-	});
-
-	fileWatcher.onDidDelete((uri) => {
-		// Notify webview that a file was deleted
-		provider.notifyFileDeleted(uri.fsPath);
+		// Schedule validation for sections associated with this file
+		// Uses debouncing (500ms) to avoid redundant checks during rapid edits
+		const webview = provider.getWebview();
+		if (webview) {
+			scheduleValidationForFile(uri.fsPath, webview);
+		}
 	});
 
 	context.subscriptions.push(fileWatcher);

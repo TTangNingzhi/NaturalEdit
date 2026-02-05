@@ -3,6 +3,7 @@ import { getFileIcon } from "../utils/fileIcons.js";
 import { FONT_SIZE, COLORS, SPACING, COMMON_STYLES } from "../styles/constants.js";
 import { SectionData } from "../types/sectionTypes.js";
 import { renderDiffedText } from "../utils/diffRender";
+import { vscodeApi } from "../utils/vscodeApi";
 
 interface SectionHeaderProps {
     section: SectionData;
@@ -154,6 +155,69 @@ const HeaderContent: React.FC<HeaderContentProps> = ({
                     </button>
                 )}
             </div>
+            {/* Row 2.5: Code validity badge with regenerate button */}
+            {section.isCodeValid === false && (
+                <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: SPACING.SMALL,
+                    marginBottom: SPACING.SMALL,
+                    padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+                    backgroundColor: "rgba(255, 165, 0, 0.15)",
+                    borderLeft: "3px solid orange",
+                    borderRadius: "3px",
+                    justifyContent: "space-between"
+                }}>
+                    <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: SPACING.SMALL
+                    }}>
+                        <span className="codicon codicon-warning" style={{
+                            color: "orange",
+                            fontSize: FONT_SIZE.BODY
+                        }} />
+                        <span style={{
+                            color: "orange",
+                            fontSize: FONT_SIZE.SMALL
+                        }}>
+                            Code changed - Summary may be outdated
+                        </span>
+                    </div>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering collapse/expand
+                            // Extract current section code from file and regenerate summary
+                            vscodeApi.postMessage({
+                                command: 'extractCurrentSectionCode',
+                                sectionId: section.metadata.id,
+                                fullPath: section.metadata.fullPath,
+                                sessionCodeSegments: section.metadata.sessionCodeSegments
+                            });
+                        }}
+                        style={{
+                            padding: "0.25em 0.75em",
+                            backgroundColor: "orange",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            fontSize: FONT_SIZE.SMALL,
+                            fontWeight: "500",
+                            whiteSpace: "nowrap",
+                            transition: "background-color 0.2s"
+                        }}
+                        onMouseOver={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "darkorange";
+                        }}
+                        onMouseOut={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = "orange";
+                        }}
+                    >
+                        Regenerate
+                    </button>
+                </div>
+            )}
             {/* Row 3: Concise summary when collapsed */}
             {collapsed && concise && (
                 <div style={{
