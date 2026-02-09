@@ -557,8 +557,6 @@ async function handleGetSummary(
 ) {
     // If present, use oldSummaryData from the message (for post-edit summary workflow)
     const oldSummaryData = message.oldSummaryData || undefined;
-    // Extract custom instruction if present
-    const customInstruction = message.customInstruction || undefined;
     // Use newCode from message if present, otherwise use current selection
     const editor = getLastActiveEditor();
     const selectedText = message.newCode || (editor?.document.getText(editor.selection) || '');
@@ -597,7 +595,7 @@ async function handleGetSummary(
             const originalCode = oldSummaryData.originalCode || selectedText;
             summary = await getSummaryWithReference(selectedText, originalCode, oldSummaryData, fileContext);
         } else {
-            summary = await getCodeSummary(selectedText, fileContext, customInstruction);
+            summary = await getCodeSummary(selectedText, fileContext);
         }
 
         const filename = editor ? path.basename(editor.document.fileName) : '';
