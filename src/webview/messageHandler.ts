@@ -386,7 +386,7 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
                     astLocator
                 );
 
-                if (isConfidentMatch(locateResult, 0.5) && locateResult.currentRange) {
+                if (isConfidentMatch(locateResult, 0.1) && locateResult.currentRange) {
                     console.log(`  [AST RESOLUTION SUCCESS]`, {
                         method: locateResult.method,
                         originalLine: seg.line,
@@ -924,7 +924,7 @@ async function applyFuzzyPatchAndReplaceInFile(
                 astLocator
             );
 
-            if (isConfidentMatch(locateResult, 0.5) && locateResult.currentRange) {
+            if (isConfidentMatch(locateResult, 0.1) && locateResult.currentRange) {
                 // Use AST's exact range (1-based line, 0-based column)
                 startPosition = new vscode.Position(
                     locateResult.currentRange.startLine - 1,
@@ -1243,7 +1243,7 @@ async function handleCheckSectionValidity(
             }
 
             // Only process confident matches
-            if (locateResult && isConfidentMatch(locateResult, 0.5)) {
+            if (locateResult && isConfidentMatch(locateResult, 0.1)) {
                 console.log('[SECTION VALIDITY] Segment resolved successfully', {
                     originalLine: seg.line,
                     resolvedLines: locateResult.currentLines,
@@ -1476,7 +1476,7 @@ async function validateSectionCode(
                     astLocator
                 );
 
-                if (isConfidentMatch(locateResult, 0.5)) {
+                if (isConfidentMatch(locateResult, 0.1)) {
                     successCount++;
                 }
             }
@@ -1505,7 +1505,7 @@ async function validateSectionCode(
             }
 
             const matchRatio = foundCount / sessionCodeSegments.length;
-            if (matchRatio >= 0.8) {
+            if (matchRatio >= 0.6) {
                 return { isValid: true };
             } else {
                 return {
@@ -1583,7 +1583,7 @@ async function handleExtractCurrentSectionCode(
                     astLocator
                 );
 
-                if (isConfidentMatch(locateResult, 0.5) && locateResult.currentRange) {
+                if (isConfidentMatch(locateResult, 0.1) && locateResult.currentRange) {
                     // Extract the code at this range
                     const startPos = new vscode.Position(
                         locateResult.currentRange.startLine - 1,
