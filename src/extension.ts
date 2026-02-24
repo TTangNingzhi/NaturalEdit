@@ -3,6 +3,7 @@ import { NaturalEditViewProvider } from './webview/webviewPanel';
 import { initialize, updateApiKey } from './llm/llmApi';
 import { ASTParser } from './utils/astParser';
 import * as path from 'path';
+import * as fs from 'fs';
 import { scheduleValidationForFile } from './webview/messageHandler';
 
 /**
@@ -32,7 +33,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Block extension activation until parser is ready
 	try {
 		const astParser = ASTParser.getInstance();
-		const wasmPath = path.join(context.extensionPath, 'node_modules', 'tree-sitter-wasms', 'out');
+		const distWasmPath = path.join(context.extensionPath, 'dist');
+		const nodeModulesWasmPath = path.join(context.extensionPath, 'node_modules', 'tree-sitter-wasms', 'out');
+
+		const wasmPath = fs.existsSync(path.join(distWasmPath, 'tree-sitter-python.wasm'))
+			? distWasmPath
+			: nodeModulesWasmPath;
+
 		await astParser.initialize(wasmPath);
 		console.log('✓ AST parser initialized successfully');
 		vscode.window.showInformationMessage('NaturalEdit: AST-based alignment enabled');

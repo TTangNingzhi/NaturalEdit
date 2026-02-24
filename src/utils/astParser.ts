@@ -1,5 +1,6 @@
 import Parser from 'web-tree-sitter';
 import * as path from 'path';
+import * as fs from 'fs';
 
 /**
  * Supported languages for AST parsing
@@ -73,14 +74,33 @@ export class ASTParser {
         }
 
         try {
-            // Initialize Parser (simple init for Node.js)
-            await Parser.init();
+            // Determine WASM path - use __dirname if in bundled extension, otherwise use provided path
+            const basePath = wasmPath || __dirname;
+
+            // Resolve web-tree-sitter runtime wasm location.
+            // In packaged extensions node_modules may be excluded, so prefer copied dist assets.
+            const runtimeWasmCandidates = [
+                path.join(basePath, 'tree-sitter.wasm'),
+                path.join(__dirname, 'tree-sitter.wasm'),
+                path.join(process.cwd(), 'node_modules', 'web-tree-sitter', 'tree-sitter.wasm')
+            ];
+            const runtimeWasmPath = runtimeWasmCandidates.find(candidate => fs.existsSync(candidate));
+
+            if (!runtimeWasmPath) {
+                throw new Error(`tree-sitter.wasm not found. Tried: ${runtimeWasmCandidates.join(', ')}`);
+            }
+
+            await Parser.init({
+                locateFile(scriptName: string, scriptDirectory: string) {
+                    if (scriptName === 'tree-sitter.wasm') {
+                        return runtimeWasmPath;
+                    }
+                    return path.join(scriptDirectory, scriptName);
+                }
+            });
 
             // Create parser instance
             this.parser = new Parser();
-
-            // Determine WASM path - use __dirname if in bundled extension, otherwise use provided path
-            const basePath = wasmPath || __dirname;
 
             // Load language grammars
             await this.loadLanguage(Language.TypeScript, 'tree-sitter-typescript.wasm', basePath);
