@@ -1187,7 +1187,7 @@ async function handleCheckSectionValidity(
     message: any,
     webviewContainer: vscode.WebviewPanel | vscode.WebviewView
 ) {
-    const { fullPath, codeSegments, filename, originalCode, astAnchor, offset } = message;
+    const { fullPath, codeSegments, filename } = message;
 
     if (!fullPath || !Array.isArray(codeSegments) || codeSegments.length === 0) {
         webviewContainer.webview.postMessage({
@@ -1213,48 +1213,7 @@ async function handleCheckSectionValidity(
         const isAstSupported = astParser.isLanguageSupported(fullPath);
         const documentText = document.getText();
 
-        // First try section-level AST relocation (same strategy as apply edits)
-        // to get a stable contiguous range for session open navigation.
-        let sectionLevelRange: vscode.Range | null = null;
-        if (isAstSupported && astAnchor && typeof originalCode === 'string' && originalCode.length > 0) {
-            const locateResult = await resolveCodeWithAST(
-                fullPath,
-                originalCode,
-                typeof offset === 'number' ? offset : 0,
-                astAnchor as ASTAnchor,
-                astLocator
-            );
-
-            // For session-open navigation, always prefer the contiguous section range
-            // when AST can resolve currentRange, even if confidence is lower.
-            // This preserves one-shot selection from first start to last end.
-            if (locateResult.currentRange) {
-                sectionLevelRange = new vscode.Range(
-                    new vscode.Position(
-                        locateResult.currentRange.startLine - 1,
-                        locateResult.currentRange.startColumn
-                    ),
-                    new vscode.Position(
-                        locateResult.currentRange.endLine - 1,
-                        locateResult.currentRange.endColumn
-                    )
-                );
-
-                console.log('[SECTION VALIDITY] Section-level AST relocation successful', {
-                    method: locateResult.method,
-                    confidence: locateResult.confidence,
-                    lines: locateResult.currentLines
-                });
-            } else {
-                console.warn('[SECTION VALIDITY] Section-level AST relocation failed, fallback to segments', {
-                    confidence: locateResult.confidence,
-                    error: locateResult.error
-                });
-            }
-        }
-
-        // Resolve each segment independently using AST.
-        // If multiple parallel nodes are resolved, we prefer their envelope range.
+        // Resolve each segment independently using AST
         const segmentResults: Array<{
             segment: any;
             locateResult: any;
@@ -1267,7 +1226,6 @@ async function handleCheckSectionValidity(
             }
 
             let locateResult = null;
-            let rangesFromTextFallback: vscode.Range[] = [];
 
             // Use AST-based resolution if supported and anchor available
             if (isAstSupported && seg.astNodeRef?.anchor && fullPath) {
@@ -1284,29 +1242,20 @@ async function handleCheckSectionValidity(
                     astLocator
                 );
             } else if (!isAstSupported) {
-                const targetText = seg.astNodeRef?.originalText || seg.code;
-                const lineOffset = Math.max(0, seg.line - 1);
-                const startOffset = document.offsetAt(new vscode.Position(lineOffset, 0));
-
-                const exactMatch = findExactMatch(documentText, targetText, startOffset);
-                const fallbackMatch = exactMatch.location !== -1
-                    ? exactMatch
-                    : findBestMatch(documentText, targetText, startOffset);
-
-                if (fallbackMatch.location !== -1) {
-                    const start = document.positionAt(fallbackMatch.location);
-                    const end = document.positionAt(fallbackMatch.location + targetText.length);
-                    rangesFromTextFallback = [new vscode.Range(start, end)];
-
+                const exactText = seg.astNodeRef?.originalText || seg.code;
+                const exactMatch = findExactMatch(documentText, exactText, 0);
+                if (exactMatch.location !== -1) {
+                    const start = document.positionAt(exactMatch.location);
+                    const end = document.positionAt(exactMatch.location + exactText.length);
                     segmentResults.push({
                         segment: seg,
                         locateResult: {
                             found: true,
-                            method: exactMatch.location !== -1 ? 'exact-match' : 'text-fallback',
-                            confidence: exactMatch.location !== -1 ? 1 : (fallbackMatch.score ?? 0),
+                            method: 'exact-match',
+                            confidence: 1,
                             currentLines: [start.line + 1, end.line + 1]
                         },
-                        ranges: rangesFromTextFallback
+                        ranges: [new vscode.Range(start, end)]
                     });
                 }
                 continue;
@@ -1315,8 +1264,8 @@ async function handleCheckSectionValidity(
                 continue;
             }
 
-            // For navigation, accept any AST result that has a concrete range.
-            if (locateResult?.currentRange) {
+            // Only process confident matches
+            if (locateResult && isConfidentMatch(locateResult, 0.1)) {
                 console.log('[SECTION VALIDITY] Segment resolved successfully', {
                     originalLine: seg.line,
                     resolvedLines: locateResult.currentLines,
@@ -1324,7 +1273,9 @@ async function handleCheckSectionValidity(
                 });
 
                 // Build ranges for this segment
-                const ranges = buildRangesFromASTResult(document, locateResult.currentRange);
+                const ranges = locateResult.currentRange
+                    ? buildRangesFromASTResult(document, locateResult.currentRange)
+                    : [];
 
                 segmentResults.push({
                     segment: seg,
@@ -1332,33 +1283,6 @@ async function handleCheckSectionValidity(
                     ranges
                 });
             } else {
-                const targetText = seg.astNodeRef?.originalText || seg.code;
-                const lineOffset = Math.max(0, seg.line - 1);
-                const startOffset = document.offsetAt(new vscode.Position(lineOffset, 0));
-                const exactMatch = findExactMatch(documentText, targetText, startOffset);
-                const fallbackMatch = exactMatch.location !== -1
-                    ? exactMatch
-                    : findBestMatch(documentText, targetText, startOffset);
-
-                if (fallbackMatch.location !== -1) {
-                    const start = document.positionAt(fallbackMatch.location);
-                    const end = document.positionAt(fallbackMatch.location + targetText.length);
-                    rangesFromTextFallback = [new vscode.Range(start, end)];
-
-                    segmentResults.push({
-                        segment: seg,
-                        locateResult: {
-                            found: true,
-                            method: exactMatch.location !== -1 ? 'exact-fallback' : 'text-fallback',
-                            confidence: exactMatch.location !== -1 ? 1 : (fallbackMatch.score ?? 0),
-                            currentLines: [start.line + 1, end.line + 1]
-                        },
-                        ranges: rangesFromTextFallback
-                    });
-
-                    continue;
-                }
-
                 console.warn('[SECTION VALIDITY] Segment resolution failed', {
                     line: seg.line,
                     confidence: locateResult?.confidence,
@@ -1367,20 +1291,7 @@ async function handleCheckSectionValidity(
             }
         }
 
-        const segmentRanges = segmentResults.flatMap(r => r.ranges);
-        const allRanges: vscode.Range[] = [];
-
-        if (segmentRanges.length >= 2) {
-            // Multi-node selection: use envelope of resolved segments.
-            allRanges.push(...segmentRanges);
-        } else if (sectionLevelRange) {
-            // Single-node or partial match: use section-level contiguous range.
-            allRanges.push(sectionLevelRange);
-        } else {
-            allRanges.push(...segmentRanges);
-        }
-
-        if (allRanges.length === 0) {
+        if (segmentResults.length === 0) {
             webviewContainer.webview.postMessage({
                 command: 'sectionValidityResult',
                 status: 'code_not_matched',
@@ -1389,12 +1300,15 @@ async function handleCheckSectionValidity(
             return;
         }
 
+        // Collect all ranges from all segments for selection
+        const allRanges = segmentResults.flatMap(r => r.ranges);
+
         // Open file and navigate to first match, selecting all matched regions
         try {
             const editor = await vscode.window.showTextDocument(document, { preview: false });
 
             if (allRanges.length > 0) {
-                // Keep single contiguous selection for session open.
+                // Create selection from first to last range
                 let minStart = allRanges[0].start;
                 let maxEnd = allRanges[0].end;
 

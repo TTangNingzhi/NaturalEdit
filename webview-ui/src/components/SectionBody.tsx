@@ -161,10 +161,7 @@ const SectionBody: React.FC<SectionBodyProps> = ({
             command: "checkSectionValidity",
             fullPath: section.metadata.fullPath,
             codeSegments,
-            filename: section.metadata.filename,
-            originalCode: section.metadata.originalCode,
-            astAnchor: section.metadata.astAnchor,
-            offset: section.metadata.offset
+            filename: section.metadata.filename
         });
 
         // Handler for backend response
