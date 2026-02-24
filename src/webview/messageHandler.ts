@@ -44,6 +44,10 @@ let currentHighlight: {
     disposables: vscode.Disposable[];
 } | null = null;
 
+// Track mapping decorations so clearHighlight can aggressively remove
+// all visible mapping highlights in one pass.
+const activeMappingDecorations = new Set<vscode.TextEditorDecorationType>();
+
 /**
  * Map to track temp file associations for diff/accept/reject workflow.
  * Key: original file path, Value: { tempFilePath: string, range: vscode.Range }
@@ -437,6 +441,8 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
                 borderRadius: "3px"
             });
 
+            activeMappingDecorations.add(decorationType);
+
             editor.setDecorations(decorationType, allRanges);
 
             // Create a new highlight record with lifecycle disposables
@@ -499,23 +505,41 @@ async function handleHighlightCodeMapping(message: any) {
  * Handles the clearHighlight command from the webview.
  * Removes any existing highlight decoration from the editor.
  */
-async function handleClearHighlight(id?: string) {
-    if (!currentHighlight) { return; }
-    if (id && currentHighlight.id !== id) { return; }
+async function handleClearHighlight(
+    id?: string
+) {
+    if (id && currentHighlight && currentHighlight.id !== id) { return; }
 
     try {
-        try {
-            currentHighlight.editor.setDecorations(currentHighlight.decoration, []);
-        } catch (e) {
-            // ignore setDecorations errors
+        const decorationsToClear = Array.from(activeMappingDecorations);
+        if (currentHighlight?.decoration && !activeMappingDecorations.has(currentHighlight.decoration)) {
+            decorationsToClear.push(currentHighlight.decoration);
         }
-        try {
-            currentHighlight.decoration.dispose();
-        } catch (e) {
-            // ignore dispose errors
+
+        for (const visibleEditor of vscode.window.visibleTextEditors) {
+            for (const decoration of decorationsToClear) {
+                try {
+                    visibleEditor.setDecorations(decoration, []);
+                } catch {
+                    // ignore setDecorations errors
+                }
+            }
         }
-        for (const d of currentHighlight.disposables) {
-            try { d.dispose(); } catch { }
+
+        for (const decoration of decorationsToClear) {
+            try {
+                decoration.dispose();
+            } catch {
+                // ignore dispose errors
+            }
+        }
+
+        activeMappingDecorations.clear();
+
+        if (currentHighlight) {
+            for (const d of currentHighlight.disposables) {
+                try { d.dispose(); } catch { }
+            }
         }
     } finally {
         currentHighlight = null;
