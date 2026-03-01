@@ -412,7 +412,7 @@ export async function getCodeFromSummaryEdit(
     const prompt = `
 You are an expert code editor. Given the following original code and an updated summary (detail level: ${detailLevel}, structure: ${structuredType}), update the code to reflect the changes in the new summary.
 - The file context below is provided ONLY for reference to help understand the code's environment, and your code changes MUST focus ONLY on the specific code snippet provided.
-- Only change the code as needed to match the new summary, and keep the rest of the code unchanged.
+- Only change the code as needed to match the new summary, and keep the rest of the code unchanged, i.e., you should re-copy and regenerate them instead of removing them.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - Pay close attention to the differences between the original summary and the edited summary, which reflects developer's intent of what the new code should be.
 - Output only the updated code, nothing else.
@@ -460,7 +460,7 @@ export async function getCodeFromDirectInstruction(
     const prompt = `
 You are an expert code editor. Given the following original code and a direct instruction, update the code to fulfill the instruction.
 - The file context below is provided ONLY for reference to help understand the code's environment, and your code changes MUST focus ONLY on the specific code snippet provided.
-- Only change the code as needed to satisfy the instruction, and keep the rest of the code unchanged.
+- Only change the code as needed to satisfy the instruction, and keep the rest of the code unchanged, i.e., you should re-copy and regenerate them instead of removing them.
 - Preserve the leading whitespace (indentation) of each line from the original code in the updated code. For any modified or new lines, match the indentation style and level of the surrounding code.
 - Output only the updated code, nothing else.
 

@@ -91,6 +91,21 @@ interface MatchResult {
     score?: number;
 }
 
+interface SessionCodeSegment {
+    code: string;
+    line: number;
+    astNodeRef?: {
+        anchor: ASTAnchor;
+        originalText: string;
+    };
+}
+
+interface SegmentResolveResult {
+    segment: SessionCodeSegment;
+    locateResult: any;
+    ranges: vscode.Range[];
+}
+
 /**
  * Finds the best match for a pattern in text using multiple matching strategies
  * @param text The text to search in
@@ -184,6 +199,106 @@ function findBestMatch(
 function findExactMatch(text: string, pattern: string, offset: number = 0): MatchResult {
     const location = text.indexOf(pattern, offset);
     return { location };
+}
+
+function getCombinedRange(ranges: vscode.Range[]): vscode.Range | undefined {
+    if (ranges.length === 0) {
+        return undefined;
+    }
+
+    let minStart = ranges[0].start;
+    let maxEnd = ranges[0].end;
+
+    for (const range of ranges) {
+        if (range.start.isBefore(minStart)) {
+            minStart = range.start;
+        }
+        if (range.end.isAfter(maxEnd)) {
+            maxEnd = range.end;
+        }
+    }
+
+    return new vscode.Range(minStart, maxEnd);
+}
+
+async function resolveRangesFromCodeSegments(
+    document: vscode.TextDocument,
+    fullPath: string,
+    codeSegments: SessionCodeSegment[],
+    confidenceThreshold: number,
+    logPrefix: string
+): Promise<{
+    segmentResults: SegmentResolveResult[];
+    allRanges: vscode.Range[];
+    combinedRange?: vscode.Range;
+}> {
+    const astParser = ASTParser.getInstance();
+    const isAstSupported = astParser.isLanguageSupported(fullPath);
+    const documentText = document.getText();
+    const segmentResults: SegmentResolveResult[] = [];
+
+    for (const seg of codeSegments) {
+        if (!seg || typeof seg.line !== 'number' || seg.line <= 0) {
+            continue;
+        }
+
+        let locateResult: any = null;
+
+        if (isAstSupported && seg.astNodeRef?.anchor && fullPath) {
+            locateResult = await resolveCodeWithAST(
+                fullPath,
+                seg.astNodeRef.originalText,
+                seg.astNodeRef.anchor.originalOffset,
+                seg.astNodeRef.anchor,
+                astLocator
+            );
+        } else if (!isAstSupported) {
+            const exactText = seg.astNodeRef?.originalText || seg.code;
+            const exactMatch = findExactMatch(documentText, exactText, 0);
+            if (exactMatch.location !== -1) {
+                const start = document.positionAt(exactMatch.location);
+                const end = document.positionAt(exactMatch.location + exactText.length);
+                segmentResults.push({
+                    segment: seg,
+                    locateResult: {
+                        found: true,
+                        method: 'exact-match',
+                        confidence: 1,
+                        currentLines: [start.line + 1, end.line + 1]
+                    },
+                    ranges: [new vscode.Range(start, end)]
+                });
+            }
+            continue;
+        } else {
+            console.warn(`${logPrefix} No AST reference for segment at line`, seg.line);
+            continue;
+        }
+
+        if (locateResult && isConfidentMatch(locateResult, confidenceThreshold) && locateResult.currentRange) {
+            const ranges = buildRangesFromASTResult(document, locateResult.currentRange);
+            segmentResults.push({
+                segment: seg,
+                locateResult,
+                ranges
+            });
+        } else {
+            console.warn(`${logPrefix} Segment resolution failed`, {
+                line: seg.line,
+                confidence: locateResult?.confidence,
+                error: locateResult?.error
+            });
+        }
+    }
+
+    const allRanges = segmentResults.flatMap(result => result.ranges);
+    const combinedRange = getCombinedRange(allRanges);
+
+    return {
+        segmentResults,
+        allRanges,
+        combinedRange
+    };
 }
 
 /**
@@ -924,7 +1039,8 @@ async function applyFuzzyPatchAndReplaceInFile(
     newCode: string,
     offset: number,
     filePath: string,
-    astAnchor?: ASTAnchor
+    astAnchor?: ASTAnchor,
+    sessionCodeSegments?: SessionCodeSegment[]
 ): Promise<{ success: boolean; patchedText?: string; error?: string }> {
     try {
         const fileText = document.getText();
@@ -934,8 +1050,39 @@ async function applyFuzzyPatchAndReplaceInFile(
         const astParser = ASTParser.getInstance();
         const isAstSupported = filePath ? astParser.isLanguageSupported(filePath) : false;
 
-        // Strategy 1: Try AST-based location first (only if supported)
-        if (isAstSupported && astAnchor && filePath) {
+        // Strategy 1: Try segment-based combined range first (same basis as section validity)
+        if (filePath && Array.isArray(sessionCodeSegments) && sessionCodeSegments.length > 0) {
+            const segmentResolution = await resolveRangesFromCodeSegments(
+                document,
+                filePath,
+                sessionCodeSegments,
+                0.1,
+                '[APPLY CHANGES]'
+            );
+
+            if (segmentResolution.combinedRange) {
+                startPosition = segmentResolution.combinedRange.start;
+                endPosition = segmentResolution.combinedRange.end;
+                locateMethod = 'segment-combined';
+
+                console.log('[APPLY CHANGES] Segment-combined range resolved', {
+                    totalSegments: sessionCodeSegments.length,
+                    resolvedSegments: segmentResolution.segmentResults.length,
+                    startLine: startPosition.line + 1,
+                    startColumn: startPosition.character,
+                    endLine: endPosition.line + 1,
+                    endColumn: endPosition.character
+                });
+            } else {
+                console.warn('[APPLY CHANGES] Segment-combined range resolution failed', {
+                    totalSegments: sessionCodeSegments.length,
+                    resolvedSegments: segmentResolution.segmentResults.length
+                });
+            }
+        }
+
+        // Strategy 2: Try AST-based location if segment-based range is unavailable
+        if (!startPosition && !endPosition && isAstSupported && astAnchor && filePath) {
             console.log('[APPLY CHANGES] Attempting AST-based code location');
 
             const locateResult = await resolveCodeWithAST(
@@ -976,7 +1123,7 @@ async function applyFuzzyPatchAndReplaceInFile(
             }
         }
 
-        // Strategy 2: Fallback to text matching if AST failed or unavailable
+        // Strategy 3: Fallback to text matching if AST failed or unavailable
         if (!startPosition || !endPosition) {
             console.log('[APPLY CHANGES] Falling back to text matching');
 
@@ -1116,6 +1263,9 @@ async function applyCodeChanges(
 
         // --- Apply the patch ---
         const astAnchor = message.astAnchor ? (message.astAnchor as ASTAnchor | undefined) : undefined;
+        const sessionCodeSegments = Array.isArray(message.sessionCodeSegments)
+            ? (message.sessionCodeSegments as SessionCodeSegment[])
+            : undefined;
         const result = await applyFuzzyPatchAndReplaceInFile(
             fileUri,
             document,
@@ -1123,7 +1273,8 @@ async function applyCodeChanges(
             newCode,
             offset,
             fullPath,
-            astAnchor
+            astAnchor,
+            sessionCodeSegments
         );
 
         if (!result.success) {
@@ -1209,87 +1360,15 @@ async function handleCheckSectionValidity(
         }
 
         const { document } = fileInfo;
-        const astParser = ASTParser.getInstance();
-        const isAstSupported = astParser.isLanguageSupported(fullPath);
-        const documentText = document.getText();
+        const segmentResolution = await resolveRangesFromCodeSegments(
+            document,
+            fullPath,
+            codeSegments as SessionCodeSegment[],
+            0.1,
+            '[SECTION VALIDITY]'
+        );
 
-        // Resolve each segment independently using AST
-        const segmentResults: Array<{
-            segment: any;
-            locateResult: any;
-            ranges: vscode.Range[];
-        }> = [];
-
-        for (const seg of codeSegments) {
-            if (!seg || typeof seg.line !== 'number' || seg.line <= 0) {
-                continue;
-            }
-
-            let locateResult = null;
-
-            // Use AST-based resolution if supported and anchor available
-            if (isAstSupported && seg.astNodeRef?.anchor && fullPath) {
-                console.log('[SECTION VALIDITY] Resolving segment with AST', {
-                    line: seg.line,
-                    pathLength: seg.astNodeRef.anchor.path.length
-                });
-
-                locateResult = await resolveCodeWithAST(
-                    fullPath,
-                    seg.astNodeRef.originalText,
-                    seg.astNodeRef.anchor.originalOffset,
-                    seg.astNodeRef.anchor,
-                    astLocator
-                );
-            } else if (!isAstSupported) {
-                const exactText = seg.astNodeRef?.originalText || seg.code;
-                const exactMatch = findExactMatch(documentText, exactText, 0);
-                if (exactMatch.location !== -1) {
-                    const start = document.positionAt(exactMatch.location);
-                    const end = document.positionAt(exactMatch.location + exactText.length);
-                    segmentResults.push({
-                        segment: seg,
-                        locateResult: {
-                            found: true,
-                            method: 'exact-match',
-                            confidence: 1,
-                            currentLines: [start.line + 1, end.line + 1]
-                        },
-                        ranges: [new vscode.Range(start, end)]
-                    });
-                }
-                continue;
-            } else {
-                console.warn('[SECTION VALIDITY] No AST reference for segment at line', seg.line);
-                continue;
-            }
-
-            // Only process confident matches
-            if (locateResult && isConfidentMatch(locateResult, 0.1)) {
-                console.log('[SECTION VALIDITY] Segment resolved successfully', {
-                    originalLine: seg.line,
-                    resolvedLines: locateResult.currentLines,
-                    confidence: locateResult.confidence
-                });
-
-                // Build ranges for this segment
-                const ranges = locateResult.currentRange
-                    ? buildRangesFromASTResult(document, locateResult.currentRange)
-                    : [];
-
-                segmentResults.push({
-                    segment: seg,
-                    locateResult,
-                    ranges
-                });
-            } else {
-                console.warn('[SECTION VALIDITY] Segment resolution failed', {
-                    line: seg.line,
-                    confidence: locateResult?.confidence,
-                    error: locateResult?.error
-                });
-            }
-        }
+        const { segmentResults, allRanges, combinedRange } = segmentResolution;
 
         if (segmentResults.length === 0) {
             webviewContainer.webview.postMessage({
@@ -1300,29 +1379,13 @@ async function handleCheckSectionValidity(
             return;
         }
 
-        // Collect all ranges from all segments for selection
-        const allRanges = segmentResults.flatMap(r => r.ranges);
-
         // Open file and navigate to first match, selecting all matched regions
         try {
             const editor = await vscode.window.showTextDocument(document, { preview: false });
 
-            if (allRanges.length > 0) {
-                // Create selection from first to last range
-                let minStart = allRanges[0].start;
-                let maxEnd = allRanges[0].end;
-
-                for (const range of allRanges) {
-                    if (range.start.isBefore(minStart)) {
-                        minStart = range.start;
-                    }
-                    if (range.end.isAfter(maxEnd)) {
-                        maxEnd = range.end;
-                    }
-                }
-
-                editor.selection = new vscode.Selection(minStart, maxEnd);
-                editor.revealRange(new vscode.Range(minStart, maxEnd), vscode.TextEditorRevealType.InCenter);
+            if (combinedRange && allRanges.length > 0) {
+                editor.selection = new vscode.Selection(combinedRange.start, combinedRange.end);
+                editor.revealRange(combinedRange, vscode.TextEditorRevealType.InCenter);
             }
         } catch (e) {
             // Ignore navigation errors, still report success

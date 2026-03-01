@@ -9,6 +9,7 @@ import {
     ExtractedSectionCodeMessage,
     AvailableScopesMessage,
     ASTAnchor,
+    CodeSegment,
     ScopeInfo
 } from "../types/sectionTypes.js";
 import { v4 as uuidv4 } from "uuid";
@@ -205,7 +206,8 @@ export const sendDirectPrompt = (
     filename: string,
     fullPath: string,
     offset: number,
-    astAnchor?: ASTAnchor
+    astAnchor?: ASTAnchor,
+    sessionCodeSegments?: CodeSegment[]
 ) => {
     vscodeApi.postMessage({
         command: "directPrompt",
@@ -215,7 +217,8 @@ export const sendDirectPrompt = (
         filename,
         fullPath,
         offset,
-        astAnchor
+        astAnchor,
+        sessionCodeSegments
     });
 };
 
@@ -241,7 +244,8 @@ export const sendEditSummary = (
     fullPath: string,
     offset: number,
     originalSummary: string,
-    astAnchor?: ASTAnchor
+    astAnchor?: ASTAnchor,
+    sessionCodeSegments?: CodeSegment[]
 ) => {
     vscodeApi.postMessage({
         command: "summaryPrompt",
@@ -254,7 +258,8 @@ export const sendEditSummary = (
         fullPath,
         offset,
         originalSummary,
-        astAnchor
+        astAnchor,
+        sessionCodeSegments
     });
 };
 
@@ -280,7 +285,8 @@ export const sendPromptToSummary = (
     filename: string,
     fullPath: string,
     offset: number,
-    astAnchor?: ASTAnchor
+    astAnchor?: ASTAnchor,
+    sessionCodeSegments?: CodeSegment[]
 ) => {
     vscodeApi.postMessage({
         command: "promptToSummary",
@@ -293,7 +299,8 @@ export const sendPromptToSummary = (
         filename,
         fullPath,
         offset,
-        astAnchor
+        astAnchor,
+        sessionCodeSegments
     });
 };
 
