@@ -4,6 +4,8 @@ All notable changes to the "naturaledit" extension will be documented in this fi
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased]
+## [1.0.0]
 
-- Initial release
+- Adaptive multi-faceted code summaries
+- Interactive NL–code mapping with AST-based structural alignment
+- Intent-driven bidirectional synchronization with incremental diffs
