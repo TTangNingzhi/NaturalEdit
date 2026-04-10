@@ -133,7 +133,6 @@ export class ASTParser {
             const modulePath = path.join(basePath, wasmFile);
             const langObj = await Parser.Language.load(modulePath);
             this.languages.set(language, langObj);
-            console.log(`✓ Successfully loaded language: ${language}`);
         } catch (error) {
             console.error(`✗ Failed to load language ${language}:`, error);
         }
@@ -384,7 +383,6 @@ export class ASTParser {
         const candidateNodes = Array.from(candidateNodesMap.values());
 
         if (candidateNodes.length === 0) {
-            console.warn(`[findMinimalContainingNode] No node found containing fragment: "${textFragment}" at line ${line}`);
             return null;
         }
 
@@ -510,7 +508,6 @@ export class ASTParser {
 
             if (!bestMatch) {
                 // No matching type found at this level, path is broken
-                console.warn(`  [findNodeByPathFlexible] Failed at level ${i}: no node with type "${expectedType}" found`);
                 return null;
             }
 

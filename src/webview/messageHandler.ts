@@ -271,7 +271,6 @@ async function resolveRangesFromCodeSegments(
             }
             continue;
         } else {
-            console.warn(`${logPrefix} No AST reference for segment at line`, seg.line);
             continue;
         }
 
@@ -281,12 +280,6 @@ async function resolveRangesFromCodeSegments(
                 segment: seg,
                 locateResult,
                 ranges
-            });
-        } else {
-            console.warn(`${logPrefix} Segment resolution failed`, {
-                line: seg.line,
-                confidence: locateResult?.confidence,
-                error: locateResult?.error
             });
         }
     }
@@ -431,7 +424,6 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
     } else {
         const { codeSegments } = message;
         if (!Array.isArray(codeSegments) || codeSegments.length === 0) {
-            console.warn("[selectCodeMapping] No code segments provided.");
             return;
         }
     }
@@ -444,9 +436,6 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
     // Shared: Editor validation
     const editor = getLastActiveEditor();
     if (!editor) {
-        if (mode === 'select') {
-            console.warn("[selectCodeMapping] No active editor found.");
-        }
         return;
     }
 
@@ -481,22 +470,13 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
         );
 
         if (filteredSegments.length === 0 && mode === 'select') {
-            console.warn("[selectCodeMapping] No valid code segments after filtering.");
             return;
         }
 
         // Shared: AST resolution loop for each segment
         for (const seg of filteredSegments) {
-            console.log(`[VISUAL MAPPING] Processing segment`, { code: seg.code, line: seg.line });
-
             // Use AST-based resolution if supported and anchor available
             if (isAstSupported && seg.astNodeRef?.anchor && fullPath) {
-                console.log(`  [AST PATH]`, {
-                    path: seg.astNodeRef.anchor.path,
-                    pathTypes: seg.astNodeRef.anchor.pathTypes,
-                    pathNames: seg.astNodeRef.anchor.pathNames
-                });
-
                 const locateResult = await resolveCodeWithAST(
                     fullPath,
                     seg.astNodeRef.originalText,
@@ -506,21 +486,9 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
                 );
 
                 if (isConfidentMatch(locateResult, 0.1) && locateResult.currentRange) {
-                    console.log(`  [AST RESOLUTION SUCCESS]`, {
-                        method: locateResult.method,
-                        originalLine: seg.line,
-                        resolvedLine: locateResult.currentLines?.[0],
-                        confidence: locateResult.confidence
-                    });
-
                     // Build ranges using utility function
                     const rangesToAdd = buildRangesFromASTResult(editor.document, locateResult.currentRange);
                     allRanges.push(...rangesToAdd);
-                } else {
-                    console.warn(`  [AST RESOLUTION FAILED]`, {
-                        confidence: locateResult.confidence,
-                        error: locateResult.error
-                    });
                 }
             } else if (!isAstSupported && fullPath) {
                 const exactText = seg.astNodeRef?.originalText || seg.code;
@@ -539,8 +507,6 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
                     });
                     allRanges.push(...rangesToAdd);
                 }
-            } else {
-                console.warn(`  [NO AST REFERENCE] Skipping ${mode} for line ${seg.line}`);
             }
         }
     }
@@ -579,8 +545,6 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
                 }
             }));
             currentHighlight = { id: highlightId, decoration: decorationType, editor, disposables };
-        } else {
-            console.warn("[highlightCodeMapping] No code regions found to highlight.");
         }
     } else {
         // Select mode: Create single selection from first to last range
@@ -600,8 +564,6 @@ async function handleCodeMapping(message: any, mode: 'highlight' | 'select') {
 
             editor.selection = new vscode.Selection(minStart, maxEnd);
             editor.revealRange(new vscode.Range(minStart, maxEnd), vscode.TextEditorRevealType.InCenter);
-        } else {
-            console.warn("[selectCodeMapping] No code regions found to select.");
         }
     }
 }
@@ -1064,27 +1026,11 @@ async function applyFuzzyPatchAndReplaceInFile(
                 startPosition = segmentResolution.combinedRange.start;
                 endPosition = segmentResolution.combinedRange.end;
                 locateMethod = 'segment-combined';
-
-                console.log('[APPLY CHANGES] Segment-combined range resolved', {
-                    totalSegments: sessionCodeSegments.length,
-                    resolvedSegments: segmentResolution.segmentResults.length,
-                    startLine: startPosition.line + 1,
-                    startColumn: startPosition.character,
-                    endLine: endPosition.line + 1,
-                    endColumn: endPosition.character
-                });
-            } else {
-                console.warn('[APPLY CHANGES] Segment-combined range resolution failed', {
-                    totalSegments: sessionCodeSegments.length,
-                    resolvedSegments: segmentResolution.segmentResults.length
-                });
             }
         }
 
         // Strategy 2: Try AST-based location if segment-based range is unavailable
         if (!startPosition && !endPosition && isAstSupported && astAnchor && filePath) {
-            console.log('[APPLY CHANGES] Attempting AST-based code location');
-
             const locateResult = await resolveCodeWithAST(
                 filePath,
                 originalCode,
@@ -1105,28 +1051,12 @@ async function applyFuzzyPatchAndReplaceInFile(
                 );
 
                 locateMethod = 'ast-based';
-
-                console.log('[APPLY CHANGES] AST location successful', {
-                    confidence: locateResult.confidence,
-                    startLine: locateResult.currentRange.startLine,
-                    startColumn: locateResult.currentRange.startColumn,
-                    endLine: locateResult.currentRange.endLine,
-                    endColumn: locateResult.currentRange.endColumn,
-                    lines: locateResult.currentLines
-                });
-            } else {
-                console.warn('[APPLY CHANGES] AST location confidence too low', {
-                    confidence: locateResult.confidence,
-                    error: locateResult.error
-                });
                 // Fall through to text matching
             }
         }
 
         // Strategy 3: Fallback to text matching if AST failed or unavailable
         if (!startPosition || !endPosition) {
-            console.log('[APPLY CHANGES] Falling back to text matching');
-
             const match = isAstSupported
                 ? findBestMatch(fileText, originalCode, offset)
                 : findExactMatch(fileText, originalCode, offset);
@@ -1134,11 +1064,6 @@ async function applyFuzzyPatchAndReplaceInFile(
                 startPosition = document.positionAt(match.location);
                 endPosition = document.positionAt(match.location + originalCode.length);
                 locateMethod = isAstSupported ? 'text-match' : 'exact-match';
-
-                console.log('[APPLY CHANGES] Text matching successful', {
-                    location: match.location,
-                    score: match.score
-                });
             } else {
                 return {
                     success: false,
@@ -1154,12 +1079,6 @@ async function applyFuzzyPatchAndReplaceInFile(
             return patchResult;
         }
 
-        console.log('[APPLY CHANGES] Patch generated successfully', {
-            method: locateMethod,
-            originalLength: originalCode.length,
-            patchedLength: patchResult.patchedText?.length
-        });
-
         // Apply edit to document using the precise range
         const edit = new vscode.WorkspaceEdit();
         edit.replace(fileUri, new vscode.Range(startPosition, endPosition), patchResult.patchedText!);
@@ -1171,12 +1090,6 @@ async function applyFuzzyPatchAndReplaceInFile(
                 error: 'Failed to apply edit to the file. The file may be read-only or locked.'
             };
         }
-
-        console.log('[APPLY CHANGES] Edit applied successfully', {
-            method: locateMethod,
-            startLine: startPosition.line + 1,
-            endLine: endPosition.line + 1
-        });
 
         return { success: true, patchedText: patchResult.patchedText };
     } catch (error) {
@@ -1389,7 +1302,6 @@ async function handleCheckSectionValidity(
             }
         } catch (e) {
             // Ignore navigation errors, still report success
-            console.warn('[SECTION VALIDITY] Navigation error:', e);
         }
 
         // Report success with per-segment details
@@ -1428,8 +1340,6 @@ export function registerSection(sectionId: string, fullPath: string, filename: s
 
     // Cache the metadata
     sectionMetadataCache.set(sectionId, metadata);
-
-    console.log(`[SECTION REGISTRY] Registered section ${sectionId} for file ${filename}`);
 }
 
 /**
@@ -1482,11 +1392,8 @@ async function validateSectionsForFile(
 ) {
     const sectionIds = sectionFileMap.get(filePath);
     if (!sectionIds || sectionIds.size === 0) {
-        console.log(`[VALIDATION] No sections registered for file ${filePath}`);
         return;
     }
-
-    console.log(`[VALIDATION] Validating ${sectionIds.size} sections for file ${filePath}`);
 
     const validationResults: Array<{
         sectionId: string;
@@ -1497,7 +1404,6 @@ async function validateSectionsForFile(
     for (const sectionId of sectionIds) {
         const cacheEntry = sectionMetadataCache.get(sectionId);
         if (!cacheEntry) {
-            console.warn(`[VALIDATION] No metadata found for section ${sectionId}`);
             continue;
         }
 
@@ -1511,7 +1417,6 @@ async function validateSectionsForFile(
     }
 
     if (validationResults.length > 0) {
-        console.log(`[VALIDATION] Sending batch validation results:`, validationResults);
         webviewContainer.webview.postMessage({
             command: 'sectionValidityBatch',
             results: validationResults
@@ -1681,16 +1586,6 @@ async function handleExtractCurrentSectionCode(
                     const range = new vscode.Range(startPos, endPos);
                     const extractedCode = document.getText(range);
                     extractedSegments.push(extractedCode);
-
-                    console.log(`[EXTRACT] Extracted segment at line ${locateResult.currentRange.startLine}:`, {
-                        confidence: locateResult.confidence,
-                        codeLength: extractedCode.length
-                    });
-                } else {
-                    console.warn(`[EXTRACT] Failed to locate segment with AST`, {
-                        line: seg.line,
-                        confidence: locateResult.confidence
-                    });
                 }
             }
         } else {
@@ -1703,10 +1598,6 @@ async function handleExtractCurrentSectionCode(
                     const range = new vscode.Range(start, end);
                     const extractedCode = document.getText(range);
                     extractedSegments.push(extractedCode);
-
-                    console.log(`[EXTRACT] Extracted segment via fuzzy match:`, {
-                        codeLength: extractedCode.length
-                    });
                 }
             }
         }
@@ -1722,8 +1613,6 @@ async function handleExtractCurrentSectionCode(
             });
             return;
         }
-
-        console.log(`[EXTRACT] Successfully extracted ${extractedSegments.length} segments for section ${sectionId}`);
 
         webviewContainer.webview.postMessage({
             command: 'extractedSectionCode',
@@ -1753,7 +1642,6 @@ async function handleDetectAvailableScopes(message: any, webviewContainer: vscod
         // Check if AST is supported for this language
         if (!astParser.isLanguageSupported(fullPath)) {
             // AST not supported - return file scope only
-            console.log(`[SCOPE DETECT] AST not supported for ${fullPath}, returning file scope only`);
             webviewContainer.webview.postMessage({
                 command: 'availableScopes',
                 sectionId,
@@ -1770,7 +1658,6 @@ async function handleDetectAvailableScopes(message: any, webviewContainer: vscod
         const tree = astParser.parse(documentText, fullPath);
         if (!tree) {
             // Parse failed - return file scope only
-            console.log(`[SCOPE DETECT] AST parsing failed for ${fullPath}, returning file scope only`);
             webviewContainer.webview.postMessage({
                 command: 'availableScopes',
                 sectionId,
@@ -1781,10 +1668,6 @@ async function handleDetectAvailableScopes(message: any, webviewContainer: vscod
 
         // Find enclosing scopes (returns a single list with type attribute)
         const result = astParser.findEnclosingScopes(tree, startLine, startColumn, endLine, endColumn);
-
-        console.log(`[SCOPE DETECT] Found scopes for section ${sectionId}:`, {
-            scopes: result.scopes?.map(s => `${s.type}${s.name ? `: ${s.name}` : ''}`)
-        });
 
         // Send results back to frontend (just pass the scopes array as-is)
         webviewContainer.webview.postMessage({
@@ -1824,7 +1707,6 @@ async function handleSelectScope(message: any) {
         }
 
         if (!editor) {
-            console.warn(`[SCOPE SELECT] Could not open editor for ${fullPath}`);
             return;
         }
 
@@ -1837,14 +1719,11 @@ async function handleSelectScope(message: any) {
 
             editor.selection = new vscode.Selection(range.start, range.end);
             editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-
-            console.log(`[SCOPE SELECT] Selected entire file ${fullPath}`);
             return;
         }
 
         // For class/method scopes, path is required
         if (!path) {
-            console.error(`[SCOPE SELECT] No AST path provided for scope selection`);
             return;
         }
 
@@ -1854,14 +1733,12 @@ async function handleSelectScope(message: any) {
         const tree = astParser.parse(documentText, fullPath);
 
         if (!tree) {
-            console.error(`[SCOPE SELECT] Failed to parse AST for ${fullPath}`);
             return;
         }
 
         // Use flexible path matching to find the node
         const result = astParser.findNodeByPathFlexible(tree, path);
         if (!result || !result.node) {
-            console.error(`[SCOPE SELECT] Failed to resolve scope via AST path`);
             return;
         }
 
@@ -1870,13 +1747,6 @@ async function handleSelectScope(message: any) {
         const startColumn = node.startPosition.column;
         const endLine = node.endPosition.row;
         const endColumn = node.endPosition.column;
-
-        console.log(`[SCOPE SELECT] Resolved ${scopeType} scope via AST path (confidence: ${result.confidence.toFixed(2)})`, {
-            startLine,
-            startColumn,
-            endLine,
-            endColumn
-        });
 
         // Create selection range with resolved positions
         const startPos = new vscode.Position(startLine, startColumn);

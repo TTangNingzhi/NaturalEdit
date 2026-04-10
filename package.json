@@ -4,7 +4,7 @@
   "publisher": "sandwich-lab",
   "icon": "media/icon.png",
   "description": "Transform your code by editing natural language summaries",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/TTangNingzhi/NaturalEdit"

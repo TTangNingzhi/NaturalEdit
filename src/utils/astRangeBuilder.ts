@@ -37,22 +37,7 @@ export async function resolveCodeWithAST(
             astAnchor
         );
 
-        if (result.found && result.confidence > 0) {
-            console.log('[AST RESOLUTION] Success', {
-                method: result.method,
-                confidence: result.confidence,
-                lines: result.currentLines,
-                offset
-            });
-            return result;
-        } else {
-            console.warn('[AST RESOLUTION] Failed', {
-                method: result.method,
-                confidence: result.confidence,
-                error: result.error
-            });
-            return result;
-        }
+        return result;
     } catch (error) {
         console.error('[AST RESOLUTION] Error during resolution:', error);
         return {
@@ -92,11 +77,6 @@ export function buildRangesFromASTResult(
         // Validate line numbers
         const maxLine = document.lineCount;
         if (startLine < 1 || startLine > maxLine || endLine < 1 || endLine > maxLine) {
-            console.warn('[BUILD RANGES] Invalid line numbers', {
-                startLine,
-                endLine,
-                maxLine
-            });
             return [];
         }
 
@@ -177,7 +157,6 @@ export function getLineTrimRange(
             new vscode.Position(lineIndex, Math.max(startChar, endChar))
         );
     } catch (error) {
-        console.warn('[GET LINE TRIM RANGE] Error on line', lineIndex, error);
         return null;
     }
 }

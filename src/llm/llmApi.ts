@@ -369,10 +369,6 @@ ${summaryText}
                 typeof item.summaryComponent === "string" &&
                 !summaryText.includes(item.summaryComponent)
             ) {
-                console.warn(
-                    `[buildSummaryMapping] summaryComponent not found in summary:`,
-                    item.summaryComponent
-                );
                 return false;
             }
             return true;
